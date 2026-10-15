@@ -1,0 +1,297 @@
+import socket
+import struct
+import sys
+import os
+import threading
+
+sys.path.append(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
+)
+
+from vpn.tun import TunInterface
+
+from pqc.mlkem import encapsulate
+
+from crypto.classical import (
+    derive_session_key,
+    encrypt,
+    decrypt
+)
+
+
+HOST = "0.0.0.0"
+PORT = 6000
+
+
+def recv_exact(sock, size):
+    data = b""
+
+    while len(data) < size:
+
+        chunk = sock.recv(size - len(data))
+
+        if not chunk:
+            raise ConnectionError("Connection closed")
+
+        data += chunk
+
+    return data
+
+
+def send_frame(sock, data):
+
+    header = struct.pack(
+        "!I",
+        len(data)
+    )
+
+    sock.sendall(header)
+    sock.sendall(data)
+
+
+def recv_frame(sock):
+
+    header = recv_exact(
+        sock,
+        4
+    )
+
+    length = struct.unpack(
+        "!I",
+        header
+    )[0]
+
+    if length <= 0 or length > 65535:
+        raise ValueError(
+            "Invalid packet length"
+        )
+
+    return recv_exact(
+        sock,
+        length
+    )
+
+
+def tun_to_network(tun, sock, session_key):
+
+    try:
+
+        while True:
+
+            packet = tun.read_packet()
+
+            if not packet:
+                continue
+
+            encrypted_packet = encrypt(
+                session_key,
+                packet
+            )
+
+            send_frame(
+                sock,
+                encrypted_packet
+            )
+
+            print(
+                f"[TUN → VPN] "
+                f"{len(packet)} bytes "
+                f"→ encrypted {len(encrypted_packet)} bytes"
+            )
+
+    except Exception as e:
+
+        print(
+            f"[!] TUN → network stopped: {e}"
+        )
+
+
+def network_to_tun(tun, sock, session_key):
+
+    try:
+
+        while True:
+
+            encrypted_packet = recv_frame(
+                sock
+            )
+
+            packet = decrypt(
+                session_key,
+                encrypted_packet
+            )
+
+            tun.write_packet(
+                packet
+            )
+
+            print(
+                f"[VPN → TUN] "
+                f"encrypted {len(encrypted_packet)} bytes "
+                f"→ decrypted {len(packet)} bytes"
+            )
+
+    except Exception as e:
+
+        print(
+            f"[!] Network → TUN stopped: {e}"
+        )
+
+
+def perform_handshake(sock):
+
+    print(
+        "[*] Waiting for ML-KEM-1024 public key..."
+    )
+
+    public_key = recv_frame(
+        sock
+    )
+
+    print(
+        f"[+] ML-KEM public key received: "
+        f"{len(public_key)} bytes"
+    )
+
+    # Server performs encapsulation
+    ciphertext, shared_secret = encapsulate(
+        public_key
+    )
+
+    print(
+        "[+] ML-KEM-1024 encapsulation successful"
+    )
+
+    # Send ciphertext to client
+    send_frame(
+        sock,
+        ciphertext
+    )
+
+    print(
+        f"[+] ML-KEM ciphertext sent: "
+        f"{len(ciphertext)} bytes"
+    )
+
+    # Convert shared secret into AES key
+    session_key = derive_session_key(
+        shared_secret
+    )
+
+    print(
+        "[+] AES-256-GCM session key established"
+    )
+
+    return session_key
+
+
+def main():
+
+    tun = TunInterface("tun0")
+    tun.create()
+    
+    tun.configure("10.8.0.1/24")
+
+    print(
+        f"[+] TUN interface: {tun.name}"
+    )
+
+    server = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_STREAM
+    )
+
+    server.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_REUSEADDR,
+        1
+    )
+
+    server.bind(
+        (HOST, PORT)
+    )
+
+    server.listen(1)
+
+    print(
+        f"[*] Listening on "
+        f"{HOST}:{PORT}"
+    )
+
+    try:
+
+        conn, addr = server.accept()
+
+        print(
+            f"[+] VPN client connected: "
+            f"{addr}"
+        )
+
+        # -------------------------------
+        # PQC HANDSHAKE
+        # -------------------------------
+
+        session_key = perform_handshake(
+            conn
+        )
+
+        print()
+        print("=" * 55)
+        print("      QUANTUM-SAFE VPN TUNNEL READY")
+        print("=" * 55)
+        print("Key Exchange : ML-KEM-1024")
+        print("KDF          : HKDF-SHA256")
+        print("Encryption   : AES-256-GCM")
+        print("=" * 55)
+        print()
+
+        # -------------------------------
+        # BIDIRECTIONAL TUNNEL
+        # -------------------------------
+
+        outgoing = threading.Thread(
+            target=tun_to_network,
+            args=(tun, conn, session_key),
+            daemon=True
+        )
+
+        incoming = threading.Thread(
+            target=network_to_tun,
+            args=(tun, conn, session_key),
+            daemon=True
+        )
+
+        outgoing.start()
+        incoming.start()
+
+        outgoing.join()
+
+    except KeyboardInterrupt:
+
+        print("\n[*] Stopping VPN server")
+
+    except Exception as e:
+
+        print(
+            f"[!] VPN server error: {e}"
+        )
+
+    finally:
+
+        try:
+            conn.close()
+        except:
+            pass
+
+        server.close()
+        tun.close()
+
+        print("[+] VPN server stopped")
+
+
+if __name__ == "__main__":
+    main()

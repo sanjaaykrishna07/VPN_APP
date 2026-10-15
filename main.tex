@@ -1,0 +1,1215 @@
+% ============================================================
+%  Smart Supply Chain Cyber Digital Twin (SSCDT)
+%  Full Project Report -- Phase I & II
+%  Amrita School of Computing, Chennai
+% ============================================================
+\documentclass[12pt,a4paper]{amritareport}
+
+% ---------- Packages (the class already loads inputenc, fontenc,
+%            graphicx, amsmath, amssymb, booktabs, hyperref) ----------
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{longtable}
+\usepackage{enumitem}
+
+% ---------- Ragged-right paragraph column ----------
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ---------- Figure macro: shows a labelled placeholder if the PNG is missing,
+%            scales tall figures to fit the page ----------
+\newcommand{\figplaceholder}[2][0.9\textwidth]{%
+  \IfFileExists{figures/#2}{%
+    \includegraphics[width=#1,height=0.7\textheight,keepaspectratio]{figures/#2}%
+  }{%
+    \fbox{\parbox[c][4.5cm][c]{\dimexpr#1-2\fboxsep-2\fboxrule\relax}{\centering\small\itshape
+      Figure not yet added:\\ \detokenize{figures/#2}}}%
+  }%
+}
+
+% ---------- Page-breaking abbreviations list ----------
+% The class sets this list in a plain tabular, which cannot break across
+% pages and loses rows. This override uses longtable; the class is untouched.
+\renewenvironment{abbreviations}{%
+  \newpage
+  \chapter*{\large LIST OF SYMBOLS AND ABBREVIATIONS}%
+  \addcontentsline{toc}{chapter}{LIST OF SYMBOLS AND ABBREVIATIONS}%
+  \begin{longtable}{@{}P{2.3cm}p{0.7cm}P{10.4cm}@{}}%
+}{%
+  \end{longtable}%
+}
+
+% ---------- Allow long URLs to break at hyphens ----------
+\makeatletter
+\g@addto@macro\UrlBreaks{\do\-}
+\makeatother
+\Urlmuskip=0mu plus 2mu\relax
+
+% ---------- Listing style ----------
+\lstdefinelanguage{YAML}{
+  keywords={true,false,null},
+  sensitive=false,
+  comment=[l]{\#},
+  morestring=[b]',
+  morestring=[b]"
+}
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    breakatwhitespace=false,
+    postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+    columns=flexible,
+    frame=single,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!50!black},
+    stringstyle=\color{red!70!black},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray}
+}
+
+% ---------- Project metadata ----------
+\reporttitle{SMART SUPPLY CHAIN CYBER DIGITAL TWIN (SSCDT)}
+\degreename{BACHELOR OF TECHNOLOGY IN COMPUTER SCIENCE AND ENGINEERING (CYBER SECURITY)}
+\reportdate{October 2026}
+\deptaddress{Department of Computer Science and Engineering, \\ Amrita School of Computing, \\ Amrita Vishwa Vidyapeetham, Chennai.}
+
+\addcandidate{SUDHARSAN S}{CH.SC.U4CYS23045}
+\addcandidate{MANOJKUMAR A}{CH.SC.U4CYS23022}
+
+\supervisor{Dr. S. UDHAYAKUMAR}{Associate Professor (Sr. Gr.)}
+\hod{Dr. S. BAGHAVATHI PRIYA}{Associate Professor \& Chairperson}
+
+\universitylogo{Amrita_Logo.png}
+\universityfulllogo{Amrita_Full_Logo.png}
+
+\begin{document}
+
+\makecoverpage
+\pagenumbering{roman}
+\maketitlepage
+\makebonafidecertificate
+\makedeclaration
+
+% ============================================================
+% ABSTRACT
+% ============================================================
+\reportabstract{
+The Smart Supply Chain Cyber Digital Twin (SSCDT) is an open-source cyber-physical defense platform for modern supply chain infrastructure. Today's supply chains connect 32 or more heterogeneous assets (trucks, vehicle IoT gateways, smart containers, reefers, warehouses, API gateways, authentication servers, ERP databases and supplier portals) across a multi-tier network that has no unified security monitoring standard. That leaves them exposed to replay, denial-of-service, spoofing, telemetry tampering and credential-stuffing attacks, of the kind seen in NotPetya (about USD 10B in damage), SolarWinds (months of undetected access), Colonial Pipeline, MOVEit (62M individuals) and Nagoya Port.
+
+SSCDT answers this with a five-layer defense pipeline: deterministic rule checking, machine-learning inspection, length validation, anti-replay checks and threat-intel signature verification. The system has two logical units. Unit 1 mirrors the 32 assets in real time using NetworkX and Eclipse Ditto. Unit 2 is the hybrid defense node, combining the pipeline, 16 unsupervised ML models, threat-intelligence enrichment, blast-radius computation, SOAR automation and automated forensic reporting.
+
+The ML ensemble, eight Isolation Forest and eight One-Class SVM models (one pair per asset type), was evaluated on 100,000 test vectors from the SSCDT testbed across four traffic classes. It reached 95.1\% accuracy and a macro F1 of 0.951, with the Impersonation class classified perfectly.
+
+In a controlled session of 200 telemetry events, SSCDT blocked attack traffic through the rules engine and through ML inference, while all 50 signature-verified valid frames were allowed through. All results come from synthetic testbed data.
+
+\noindent\textbf{Keywords:} Cyber Digital Twin; Supply Chain Security; C8 Algorithm; Isolation Forest; One-Class SVM; SHAP Explainability; NetworkX; Eclipse Ditto; MITRE ATT\&CK; Wazuh SIEM; Suricata IDS; SOAR; Blast Radius; AWS Fargate; Threat Intelligence.
+}
+
+\acknowledgement{
+This project would not have been possible without the contribution of many people. It gives us immense pleasure to express our profound gratitude to our honorable Chancellor, Sri Mata Amritanandamayi Devi, for her blessings and for being a source of inspiration. We extend our sincere thanks to the Administrative Director, Sampoojya Swami Vinyamritananda Puri, of Amrita Vishwa Vidyapeetham, Chennai, for his guidance and support. We are deeply indebted to our Director, I B Manikantan, of Amrita School of Computing, for providing all the facilities and extended support that enabled us to gain valuable education and learning experience.
+
+We extend our special thanks to Dr. V Jayakumar, Principal of Amrita School of Computing, for the support provided in the successful completion of this project. We are also grateful to Dr. S Baghavathi Priya, Chairperson, Department of Computer Science and Engineering, and Dr. S Udhaya Kumar, Program Chair, Department of Computer Science and Engineering -- Cyber Security, for their valuable guidance and encouragement throughout this project.
+
+We would like to extend our heartfelt thanks to all faculty members and staff of the Amrita School of Computing for their continuous support. Finally, we extend our gratitude to our families and friends for their encouragement and moral support throughout this project.
+}
+
+\frontmattertoc
+
+% ============================================================
+% ABBREVIATIONS
+% ============================================================
+\begin{abbreviations}
+\textbf{API}   & - \quad & Application Programming Interface \\
+\textbf{APT}   & - \quad & Advanced Persistent Threat \\
+\textbf{AWS}   & - \quad & Amazon Web Services \\
+\textbf{BFS}   & - \quad & Breadth-First Search \\
+\textbf{C8}    & - \quad & Closed-Loop Threat-Intel Reweighting \\
+\textbf{CVE}   & - \quad & Common Vulnerabilities and Exposures \\
+\textbf{CWE}   & - \quad & Common Weakness Enumeration \\
+\textbf{DB}    & - \quad & Database \\
+\textbf{DSU}   & - \quad & Disjoint Set Union \\
+\textbf{DT}    & - \quad & Digital Twin \\
+\textbf{ECS}   & - \quad & Elastic Container Service \\
+\textbf{ERP}   & - \quad & Enterprise Resource Planning \\
+\textbf{F1}    & - \quad & F1 Score \\
+\textbf{FIM}   & - \quad & File Integrity Monitoring \\
+\textbf{GPS}   & - \quad & Global Positioning System \\
+\textbf{HTTP}  & - \quad & Hypertext Transfer Protocol \\
+\textbf{IDS}   & - \quad & Intrusion Detection System \\
+\textbf{IoC}   & - \quad & Indicator of Compromise \\
+\textbf{IoT}   & - \quad & Internet of Things \\
+\textbf{IF}    & - \quad & Isolation Forest \\
+\textbf{JWT}   & - \quad & JSON Web Token \\
+\textbf{LLM}   & - \quad & Large Language Model \\
+\textbf{MITRE} & - \quad & MITRE ATT\&CK Framework \\
+\textbf{ML}    & - \quad & Machine Learning \\
+\textbf{MQTT}  & - \quad & Message Queuing Telemetry Transport \\
+\textbf{OSINT} & - \quad & Open-Source Intelligence \\
+\textbf{RDS}   & - \quad & Relational Database Service \\
+\textbf{REST}  & - \quad & Representational State Transfer \\
+\textbf{SIEM}  & - \quad & Security Information and Event Management \\
+\textbf{SOAR}  & - \quad & Security Orchestration, Automation and Response \\
+\textbf{SOC}   & - \quad & Security Operations Center \\
+\textbf{SSCDT} & - \quad & Smart Supply Chain Cyber Digital Twin \\
+\textbf{SSE}   & - \quad & Server-Sent Events \\
+\textbf{SVM}   & - \quad & Support Vector Machine (One-Class) \\
+\textbf{TLS}   & - \quad & Transport Layer Security \\
+\textbf{VGW}   & - \quad & Vehicle Gateway \\
+\textbf{XAI}   & - \quad & Explainable Artificial Intelligence \\
+\end{abbreviations}
+
+\startmainmatter
+
+% ============================================================
+\chapter{INTRODUCTION}
+% ============================================================
+
+\section{BACKGROUND}
+
+Global supply chains now combine operational technology (trucks, containers, IoT gateways, warehouses) with enterprise IT. That convergence is convenient, but it also gives attackers many more places to get in.
+
+\begin{table}[H]
+\centering
+\caption{Major Supply Chain Cyber Incidents (2017--2024)}
+\label{tab:incidents}
+\begin{tabular}{@{}llP{7cm}@{}}
+\toprule
+\textbf{Incident} & \textbf{Year} & \textbf{Impact} \\
+\midrule
+NotPetya & 2017 & About USD 10B global damage; Maersk reported losses near USD 300M \\
+SolarWinds & 2020 & Around 18,000 organizations received the trojanized update \\
+Colonial Pipeline & 2021 & Operations of a 5,500-mile pipeline halted; USD 4.4M ransom paid \\
+MOVEit & 2023 & More than 2,000 organizations and about 62M individuals affected \\
+Nagoya Port & 2023 & Container terminal operations halted for multiple days \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A \textit{Digital Twin} is a virtual replica that stays continuously synchronized with its physical counterpart. Adding cybersecurity analytics turns it into a \textit{Cyber Digital Twin}, a platform for proactive defense.
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.9\textwidth]{dt_generations.png}
+\caption{Evolution of digital twin generations from G1 to G4.}
+\label{fig:dt_gen}
+\end{figure}
+
+\section{MOTIVATION}
+
+Traditional cybersecurity tools fall short in four measurable ways:
+
+\begin{enumerate}
+    \item \textbf{Reactive and signature-bound.} They only catch known signatures, and industry reports put the time to identify advanced attacks at many months.
+    \item \textbf{Topology-blind.} They do not model dependency hierarchies, so blast radius has to be worked out by hand.
+    \item \textbf{Static risk posture.} Risk scores do not change when an IOC is confirmed malicious.
+    \item \textbf{Alert fatigue.} Industry surveys commonly report that a majority of SOC analysts experience it.
+\end{enumerate}
+
+\section{PROBLEM STATEMENT}
+
+Given a supply chain of $N$ interconnected cyber-physical assets, the problem is to:
+\begin{enumerate}
+    \item mirror all $N$ assets in a digital twin;
+    \item detect anomalies with hybrid rules and ML;
+    \item enrich IOCs against live threat intelligence;
+    \item compute a topology-aware blast radius;
+    \item reconstruct attacks as MITRE ATT\&CK narratives; and
+    \item auto-triage every detection.
+\end{enumerate}
+
+Formally, the digital twin is a graph $G = (V, E)$ with $V = \{v_1, \ldots, v_{32}\}$ and a risk score $r_i(t)\in[0,1]$ per asset. The \textbf{C8 reweighting function} is
+\begin{equation}
+r_i'(t) = \min\Bigl\{1,\; r_i(t) + \eta \cdot \sum_{k=1}^{K} w_k \cdot \mathbf{1}\bigl[\text{IOC}_k \in v_i\bigr]\Bigr\},
+\end{equation}
+where $\eta$ is the learning rate, $w_k$ the weight of indicator $k$, and $\mathbf{1}[\cdot]$ the indicator function. Section~\ref{sec:c8} gives the consensus-based form actually implemented.
+
+\section{OBJECTIVES}
+
+\begin{enumerate}
+    \item Build a 32-asset Cyber Digital Twin.
+    \item Detect anomalies with 13 rules and 16 ML models.
+    \item Reconstruct attacks with MITRE ATT\&CK tagging.
+    \item Auto-triage detections into TP/FP/FN/TN.
+    \item Ingest telemetry over REST and MQTT.
+    \item Enrich IOCs (C8).
+    \item Compute blast radius.
+    \item Ship a live dashboard.
+\end{enumerate}
+
+\section{SCOPE OF THE PROJECT}
+
+SSCDT is scoped to a four-tier supply chain architecture with 32 seeded assets, MQTT at QoS 1, REST API ingestion, a 14-service Docker Compose stack, Python 3.13 and PostgreSQL 16.
+
+\section{CONTRIBUTIONS OF THE WORK}
+
+\begin{enumerate}
+    \item A five-layer sequential defense pipeline.
+    \item C8 Closed-Loop Threat-Intel Reweighting.
+    \item A dual digital twin (NetworkX and Eclipse Ditto).
+    \item Automated forensic reporting.
+    \item Cloud-backed over-the-air (OTA) threat intelligence.
+\end{enumerate}
+
+\section{ORGANIZATION OF THE REPORT}
+
+Chapter~2 surveys the literature. Chapter~3 covers threat modeling. Chapter~4 details the design. Chapter~5 covers the implementation. Chapter~6 reports results. Chapter~7 concludes.
+
+% ============================================================
+\chapter{LITERATURE SURVEY}
+% ============================================================
+
+\section{DIGITAL TWINS FOR CYBERSECURITY}
+
+Silva et al.~\cite{ref1} propose an AI-driven, twin-based SOAR framework. Khan et al.~\cite{ref2} review 27 papers on twin-enabled incident detection, and Qin et al.~\cite{ref4} survey security applications of digital twins.
+
+\section{AI/ML FOR ANOMALY DETECTION}
+
+Zhang et al.~\cite{ref5} review AI for twin security, Abdel-Basset et al.~\cite{ref6} propose Cyber-Twin for vehicular networks, and Hassan et al.~\cite{ref7} develop twin-enhanced incident response.
+
+\section{THREAT INTELLIGENCE AND IOC ENRICHMENT}
+
+Leite et al.~\cite{ref9} map open-source intelligence to MITRE ATT\&CK, and Kamm\"uller et al.~\cite{ref19} improve IOC quality with STIX graphs.
+
+\section{EXPLAINABLE AI IN SECURITY}
+
+Lawal et al.~\cite{ref17} observe that SHAP is rarely deployed in real-time security pipelines. SSCDT addresses this gap by attaching a SHAP explanation to every ML detection.
+
+\section{COMPARISON WITH SSCDT}
+
+\begin{table}[H]
+\centering
+\caption{Feature Comparison of Related Systems}
+\label{tab:comparison}
+\small
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{System} & \textbf{Crypto} & \textbf{ML} & \textbf{Rules} & \textbf{OTA} & \textbf{HSM} & \textbf{Dashboard} \\
+\midrule
+Silva 2026 & --- & Yes & Yes & --- & --- & --- \\
+Khan 2025 & --- & Yes & Yes & --- & --- & --- \\
+Zhang 2024 & --- & Yes & --- & --- & --- & --- \\
+Hassan 2023 & Yes & Yes & Yes & --- & --- & --- \\
+Leite 2022 & Yes & --- & Yes & Yes & --- & --- \\
+\textbf{SSCDT (Ours)} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.85\textwidth]{comparison_matrix.png}
+\caption{Research landscape: digital twin maturity vs threat-intelligence integration.}
+\label{fig:landscape}
+\end{figure}
+
+% ============================================================
+\chapter{THREAT MODELING AND ATTACK ANALYSIS}
+% ============================================================
+
+\section{SUPPLY CHAIN ATTACK TAXONOMY}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.95\textwidth]{attack_taxonomy.png}
+\caption{Supply chain attack taxonomy and SSCDT detection mapping.}
+\label{fig:taxonomy}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Supply Chain Attack Taxonomy and SSCDT Detection Mapping}
+\label{tab:attack_taxonomy}
+\begin{tabular}{@{}P{2.4cm}P{3.6cm}P{3.2cm}P{3cm}@{}}
+\toprule
+\textbf{Attack Type} & \textbf{Mechanism} & \textbf{Observable Feature} & \textbf{Detection Layer} \\
+\midrule
+Replay & Retransmit captured frames & Stale freshness counter & L4 Anti-Replay \\
+DoS (flood) & High-frequency frames on ID 0x000 & Frequency $>$ threshold & L1 Rules \\
+Fuzzy & Random ID and payload & High Shannon entropy & L2 ML \\
+Spoofing & Forge asset identity & Invalid threat-intel verdict & L5 Intel \\
+Tampering & Modify telemetry payload & ML anomaly + SHAP & L2 ML + L5 \\
+Credential & Brute-force authentication & Login-attempt spike & L2 ML + L1 \\
+Malformed & Invalid DLC value & DLC $\neq$ 8 & L3 Length \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{STRIDE ANALYSIS OF SSCDT}
+
+\begin{table}[H]
+\centering
+\caption{STRIDE Threat Model Matrix}
+\label{tab:stride}
+\small
+\begin{tabular}{@{}P{1.9cm}P{2.3cm}P{1.8cm}P{1.6cm}P{3.1cm}P{1.5cm}@{}}
+\toprule
+\textbf{Threat} & \textbf{Asset} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Mitigation} & \textbf{Residual} \\
+\midrule
+Spoofing & API server & Medium & High & Operator token & Low \\
+Spoofing & VGW identity & High & High & CSPRNG + JWT & Low \\
+Tampering & Telemetry & High & High & Pydantic v2 & Low \\
+Tampering & Ditto things & Medium & Medium & Policy engine & Low \\
+Repudiation & Command execution & Medium & Medium & soar\_actions log & Low \\
+Repudiation & Detection & Low & Medium & ml\_explanations & Low \\
+Info disclosure & IOC data & Medium & High & TLS + Secrets Manager & Low \\
+Info disclosure & Telemetry & High & Medium & mTLS + encryption & Medium \\
+DoS & /api/telemetry & High & Medium & Rate limiting & Low \\
+DoS & MQTT broker & Medium & High & QoS 1 + persistence & Low \\
+Elevation & Container & Medium & High & Non-root UID 10001 & Low \\
+Elevation & DB access & Low & High & Least privilege & Low \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{MITRE ATT\&CK MAPPING}
+
+\begin{longtable}{@{}P{3cm}P{1.8cm}P{4cm}P{4cm}@{}}
+\caption{MITRE ATT\&CK Technique Mapping}\label{tab:mitre}\\
+\toprule
+\textbf{Tactic} & \textbf{ID} & \textbf{Technique} & \textbf{SSCDT Detection} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Tactic} & \textbf{ID} & \textbf{Technique} & \textbf{SSCDT Detection} \\
+\midrule
+\endhead
+Initial Access & T1566.002 & Spearphishing Link & Email gateway rules \\
+Execution & T1059.001 & PowerShell & Wazuh rule 92052 \\
+Persistence & T1547.001 & Registry Run Keys & Wazuh FIM alerts \\
+Privilege Escalation & T1068 & Exploitation for Privilege Escalation & Suricata CVE rules \\
+Defense Evasion & T1070.001 & Clear Windows Event Logs & Wazuh rule 60102 \\
+Credential Access & T1003.001 & LSASS Memory & EDR signature \\
+Discovery & T1046 & Network Service Discovery & Suricata port scan rule \\
+Lateral Movement & T1021.002 & SMB/Windows Admin Shares & Suricata SMB rule \\
+Collection & T1113 & Screen Capture & Process behavior (ML) \\
+Command \& Control & T1071.001 & Web Protocols & IOC + ML ensemble \\
+Exfiltration & T1041 & Exfiltration Over C2 Channel & Blast radius + DLP \\
+Impact & T1486 & Data Encrypted for Impact & File entropy (ML) \\
+Impact & T1490 & Inhibit System Recovery & Wazuh + Suricata \\
+\bottomrule
+\end{longtable}
+
+\section{ATTACK TREE FOR VGW COMPROMISE}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.95\textwidth]{attack_tree_vgw.png}
+\caption{Hierarchical attack tree for Vehicle Gateway compromise.}
+\label{fig:attack_tree}
+\end{figure}
+
+% ============================================================
+\chapter{SYSTEM DESIGN AND ARCHITECTURE}
+% ============================================================
+
+\section{COMPREHENSIVE SYSTEM ARCHITECTURE}
+
+SSCDT is orchestrated as a mesh of 14 Docker containers forming a layered cyber-physical platform (Figure~\ref{fig:architecture}).
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.98\textwidth]{architecture.png}
+\caption{SSCDT 14-service architecture with dual Digital Twin.}
+\label{fig:architecture}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{SSCDT Technology Stack}
+\label{tab:stack}
+\begin{tabular}{@{}P{2.8cm}P{4.6cm}P{5.6cm}@{}}
+\toprule
+\textbf{Layer} & \textbf{Technologies} & \textbf{Responsibility} \\
+\midrule
+API core & FastAPI (Python 3.13), Pydantic v2 & Async telemetry ingestion \\
+Digital twin & NetworkX 3.3 + Eclipse Ditto & 32-node graph \\
+Database & PostgreSQL 16 Alpine & 20 normalized tables \\
+Telemetry bus & Eclipse Mosquitto (MQTT 2.0) & Pub/sub broker \\
+Security monitoring & Wazuh 4.7, Suricata 7.0 & FIM, perimeter IDS \\
+Machine learning & scikit-learn 1.5, joblib, SHAP & 16 models with SHAP \\
+Dashboard & Flask, Leaflet.js, Chart.js, D3.js & 5-tab UI \\
+DevOps & Docker, GitHub Actions, Terraform & CI/CD, AWS IaC \\
+Observability & Prometheus, Grafana & Metrics, dashboards \\
+Reverse proxy & Nginx & TLS termination, routing \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{FIVE-LAYER DEFENSE PIPELINE}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.8\textwidth]{pipeline_5layer.png}
+\caption{SSCDT five-layer sequential defense pipeline.}
+\label{fig:pipeline}
+\end{figure}
+
+The pipeline inspects each event in five sequential layers:
+
+\begin{enumerate}
+    \item \textbf{L1, Deterministic rule check.} OTA-synced JSON threat rules block known attacks in constant time.
+    \item \textbf{L2, ML anomaly inspector.} Eight Isolation Forest and eight One-Class SVM models examine events that passed L1.
+    \item \textbf{L3, Length validation.} Verifies that the DLC is exactly 8 bytes.
+    \item \textbf{L4, Anti-replay check.} Validates freshness counters.
+    \item \textbf{L5, Threat-intel signature verification.} Queries VirusTotal, AbuseIPDB and AlienVault OTX.
+\end{enumerate}
+
+\section{THE C8 ALGORITHM}
+\label{sec:c8}
+
+The \textbf{C8 Closed-Loop Threat-Intel Reweighting} algorithm works in five steps:
+
+\begin{enumerate}
+    \item \textbf{IOC extraction.} Eleven indicator types are pulled from telemetry.
+    \item \textbf{Multi-source query.} Each IOC is checked against VirusTotal, AbuseIPDB and AlienVault OTX.
+    \item \textbf{Consensus verdict.}
+    \begin{equation}
+    S_{\text{consensus}}(x) = \frac{\sum_{k=1}^{3} w_k \cdot s_k(x)}{\sum_{k=1}^{3} w_k}
+    \end{equation}
+    \item \textbf{Risk reweighting.}
+    \begin{equation}
+    r_i'(t) = \min\bigl\{1,\; r_i(t) + \eta \cdot S_{\text{consensus}}(x) \cdot \mathbf{1}[S_{\text{consensus}}(x) > \tau]\bigr\}
+    \end{equation}
+    \item \textbf{Blast-radius recompute.}
+    \begin{equation}
+    B(v_c) = \sum_{u \in V\setminus\{v_c\}} r_u(t) \cdot 0.7^{\,\text{dist}(v_c, u)}
+    \end{equation}
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.85\textwidth]{c8_algorithm.png}
+\caption{C8 Closed-Loop Threat-Intel Reweighting pipeline.}
+\label{fig:c8}
+\end{figure}
+
+\section{DESIGN PATTERNS APPLIED}
+
+\begin{table}[H]
+\centering
+\caption{Design Patterns and Their Applications}
+\label{tab:patterns}
+\begin{tabular}{@{}P{3cm}P{4cm}P{6cm}@{}}
+\toprule
+\textbf{Pattern} & \textbf{Where Used} & \textbf{Rationale} \\
+\midrule
+Repository & database/ & Abstracts the SQLAlchemy ORM \\
+Factory & ml/feature extractors/ & Creates an extractor by asset type \\
+Observer & Ditto sync & Notifies on state change \\
+Strategy & detection/ & Swaps rule and ML detectors at runtime \\
+Singleton & config/ & One shared config instance \\
+Circuit Breaker & api sources/ & Handles feed failures \\
+Saga & SOAR & Multi-step playbook rollback \\
+CQRS & C8 reweighting & Separates read and write paths \\
+Event Sourcing & audit log & Immutable event history \\
+Decorator & require auth & Cross-cutting concerns \\
+Adapter & Wazuh/Suricata & Normalizes external feeds \\
+Facade & api/routes/ & Unified API surface \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{DATA FLOW DIAGRAMS}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.8\textwidth]{dfd_level0.png}
+\caption{DFD Level 0: context diagram.}
+\label{fig:dfd0}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.98\textwidth]{dfd_level1.png}
+\caption{DFD Level 1: major processes.}
+\label{fig:dfd1}
+\end{figure}
+
+\section{ENTITY-RELATIONSHIP DIAGRAM}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.98\textwidth]{er_diagram.png}
+\caption{Entity-relationship diagram (20 tables).}
+\label{fig:er}
+\end{figure}
+
+\section{UML CLASS DIAGRAM}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.98\textwidth]{uml_class.png}
+\caption{Core UML class diagram.}
+\label{fig:uml}
+\end{figure}
+
+\section{SEQUENCE DIAGRAM}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.9\textwidth]{sequence_c8.png}
+\caption{Sequence diagram: C8 reweighting.}
+\label{fig:seq_c8}
+\end{figure}
+
+\section{STATE MACHINE DIAGRAM}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.95\textwidth]{state_asset_fsm.png}
+\caption{Asset finite state machine (9 states).}
+\label{fig:fsm}
+\end{figure}
+
+% ============================================================
+% ML SECTION
+% ============================================================
+
+\section{MACHINE LEARNING PIPELINE}
+
+SSCDT trains \textbf{16 unsupervised ML models}: eight Isolation Forest and eight One-Class SVM models, one pair per asset type.
+
+\subsection{Why 16 Models? Ensemble Justification}
+
+SSCDT trains 16 models rather than one, for three reasons.
+
+\textbf{1. Asset-type heterogeneity.} Trucks, gateways, warehouses and databases have very different telemetry distributions.
+
+\textbf{2. Algorithmic diversity.} Isolation Forest isolates anomalies by path length, while One-Class SVM draws a boundary around normal behavior. When both flag an event, confidence is high.
+
+\textbf{3. Explainability.} SHAP TreeExplainer works natively on the Isolation Forest trees, and KernelExplainer is used for the SVM.
+
+\begin{table}[H]
+\centering
+\caption{Per-Asset-Type Model Pairing (16 Total)}
+\label{tab:model_pairing}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Asset Type} & \textbf{Asset Count} & \textbf{IF Model} & \textbf{SVM Model} \\
+\midrule
+Truck & 8 & IF-TRUCK-01 & SVM-TRUCK-01 \\
+Vehicle Gateway & 8 & IF-VGW-01 & SVM-VGW-01 \\
+Container & 4 & IF-CONT-01 & SVM-CONT-01 \\
+Reefer & 4 & IF-REEF-01 & SVM-REEF-01 \\
+Warehouse & 4 & IF-WH-01 & SVM-WH-01 \\
+API Gateway & 2 & IF-API-01 & SVM-API-01 \\
+Auth System & 1 & IF-AUTH-01 & SVM-AUTH-01 \\
+Database & 1 & IF-DB-01 & SVM-DB-01 \\
+\midrule
+\textbf{Total} & \textbf{32} & \textbf{8 models} & \textbf{8 models} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{ML Model Configuration}
+
+\begin{table}[H]
+\centering
+\caption{ML Model Hyperparameters}
+\label{tab:ml}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Isolation Forest} & \textbf{One-Class SVM} \\
+\midrule
+n estimators & 100 & --- \\
+max samples & auto (256) & --- \\
+contamination & 0.05 & --- \\
+kernel & --- & rbf \\
+gamma & --- & scale \\
+nu & --- & 0.05 \\
+tol & --- & 1e-3 \\
+random state & 42 & 42 \\
+Training samples & $\sim$12,000 per type & $\sim$12,000 per type \\
+Inference latency & $<$1 ms & $<$2 ms \\
+Model size (joblib) & 2.1 MB & 2.1 MB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Feature Engineering}
+
+Each asset type has a dedicated feature extractor that produces 20--26 engineered features.
+
+\begin{table}[H]
+\centering
+\caption{Feature Counts per Asset Type}
+\label{tab:features}
+\begin{tabular}{@{}lcP{6.4cm}@{}}
+\toprule
+\textbf{Asset Type} & \textbf{Features} & \textbf{Representative Features} \\
+\midrule
+Truck & 24 & speed, fuel, GPS accuracy, engine temp \\
+Vehicle Gateway & 22 & packet rate, TLS failures, auth failures \\
+Container & 20 & internal temp, shock events, door count \\
+Reefer & 22 & setpoint, compressor duty, ethylene \\
+Warehouse & 26 & dock utilization, worker count, power \\
+API Gateway & 24 & request rate, 5xx rate, user-agent entropy \\
+Auth System & 22 & login attempts, MFA failures, token churn \\
+Database & 24 & query rate, deadlocks, replication lag \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Truck Feature Vector (17 of 24 Features Shown)}
+
+\begin{table}[H]
+\centering
+\caption{Selected Truck Features and Rationale}
+\label{tab:truck_features}
+\small
+\begin{tabular}{@{}P{3.3cm}P{3.7cm}P{5.7cm}@{}}
+\toprule
+\textbf{Feature} & \textbf{Formula} & \textbf{Rationale} \\
+\midrule
+speed kmh & raw & Direct speed measurement \\
+speed zscore & $(x-\mu)/\sigma$ & Deviation from baseline \\
+speed rate & $dx/dt$ & Sudden acceleration change \\
+heading change & $\Delta$heading & Erratic driving pattern \\
+harsh brake & binary & Aggressive behavior flag \\
+fuel rate & $\Delta$fuel/$\Delta t$ & Fuel theft or leak detection \\
+gps accuracy & raw & Signal quality measure \\
+gps jump & binary & GPS spoofing indicator \\
+route deviation & dist(actual, expected) & Hijacking detection \\
+cargo temp & raw & Reefer integrity \\
+door open & binary & Unauthorized access \\
+telemetry rate & msg/s & Communications anomaly \\
+mqtt latency & ms & Network quality \\
+hour sin & $\sin(2\pi h/24)$ & Cyclical time encoding \\
+hour cos & $\cos(2\pi h/24)$ & Cyclical time encoding \\
+speed roll mean & mean of 5 samples & Smoothing \\
+fuel roll mean & mean of 5 samples & Smoothing \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Training Pipeline}
+
+\begin{lstlisting}[language=Python, caption={ML training pipeline}]
+class ModelTrainer:
+    """Orchestrates training of all 16 models."""
+
+    async def train_all(self):
+        for asset_type in ASSET_TYPES:  # 8 types
+            # 1. Load telemetry from PostgreSQL
+            df = await self.load_telemetry(asset_type, lookback_days=30)
+
+            # 2. Extract 20-26 engineered features
+            X = self.extract_features(df, asset_type)
+
+            # 3. Train Isolation Forest
+            if_model = IsolationForest(
+                n_estimators=100,
+                contamination=0.05,
+                random_state=42
+            ).fit(X)
+
+            # 4. Train One-Class SVM
+            svm_model = OneClassSVM(
+                kernel='rbf', gamma='scale', nu=0.05
+            ).fit(X[:10000])
+
+            # 5. Evaluate and persist with metadata
+            self.persist_model(if_model, asset_type, 'if')
+            self.persist_model(svm_model, asset_type, 'svm')
+\end{lstlisting}
+
+\subsection{Drift Detection and Retraining}
+
+\begin{table}[H]
+\centering
+\caption{Drift Detection Methods}
+\label{tab:drift}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Method} & \textbf{Formula} & \textbf{Threshold} & \textbf{Trigger} \\
+\midrule
+KS test & $\sup_x |F_1(x) - F_2(x)|$ & $> 0.3$ & Immediate retrain \\
+PSI & $\sum (p-q) \ln(p/q)$ & $> 0.25$ & 24-hour retrain \\
+JS divergence & $\tfrac{1}{2} D_{KL}(P \| M) + \tfrac{1}{2} D_{KL}(Q \| M)$ & $> 0.2$ & 24-hour retrain \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Model Card: Truck}
+
+\begin{table}[H]
+\centering
+\caption{Model Card: Truck Asset Type}
+\label{tab:card_truck}
+\begin{tabular}{@{}lP{9cm}@{}}
+\toprule
+\textbf{Field} & \textbf{Value} \\
+\midrule
+Model IDs & IF-TRUCK-01, SVM-TRUCK-01 \\
+Algorithms & Isolation Forest, One-Class SVM \\
+Asset type & Truck (TRUCK-001 to TRUCK-008) \\
+Training samples & 12,000 \\
+Features & 24 engineered \\
+Hyperparameters & IF: n=100, contamination=0.05; SVM: RBF kernel, $\nu$=0.05 \\
+Precision & 0.89 (IF), 0.86 (SVM) \\
+Recall & 1.00 (both) \\
+F1 & 0.94 (IF), 0.92 (SVM) \\
+Top features & speed, fuel, GPS accuracy, engine temperature \\
+Intended use & Real-time fleet monitoring \\
+Limitations & Needs about 30 days of baseline data \\
+Ethical notes & No PII; GPS anonymized at 100~m \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{SHAP Explainability}
+
+For every anomaly detection, SHAP produces:
+
+\begin{itemize}
+    \item a \textbf{force plot} showing feature contributions,
+    \item a \textbf{waterfall plot} ordering features by impact, and
+    \item a \textbf{summary plot} of global feature importance.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.98\textwidth]{shap_force.png}
+\caption{SHAP force plot for a Vehicle Gateway anomaly.}
+\label{fig:shap}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Top SHAP Feature per Asset Type}
+\label{tab:shap_features}
+\begin{tabular}{@{}P{3cm}P{3.2cm}P{1.8cm}P{4cm}@{}}
+\toprule
+\textbf{Asset} & \textbf{Top Feature} & \textbf{SHAP} & \textbf{Interpretation} \\
+\midrule
+Truck & fuel rate & +0.18 & Unusual fuel drop \\
+VGW & packet rate & +0.22 & Burst traffic \\
+Warehouse & worker density & +0.19 & Unexpected crowd \\
+API & 5xx rate & +0.24 & Server errors \\
+Auth & login attempts & +0.21 & Brute force \\
+DB & query rate & +0.17 & Query flood \\
+Reefer & temp error & +0.20 & Cooling failure \\
+Container & shock events & +0.16 & Physical tampering \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\chapter{IMPLEMENTATION}
+% ============================================================
+
+\section{PROJECT STRUCTURE}
+
+\begin{lstlisting}[language={}, caption={SSCDT repository layout}]
+smart-supply-chain-cyber-digital-twin/
+|-- .github/workflows/        # ci.yml, deploy.yml
+|-- api/                      # FastAPI app + 14 route controllers
+|-- api_sources/              # Wazuh, Suricata, Ditto adapters
+|-- attack_story/             # MITRE ATT&CK stories + LLM narrator
+|-- dashboard/                # Flask UI (5 tabs)
+|-- database/                 # SQLAlchemy models + 20 tables
+|-- detection/                # 13 rules + risk scoring
+|-- digital_twin/             # NetworkX + Ditto sync
+|-- ingestion/                # MQTT listener + validation
+|-- ml/                       # 16 models + SHAP
+|-- soar/                     # YAML playbook engine
+|-- terraform/                # AWS IaC
+|-- tests/                    # 192 pytest tests
+`-- docker-compose.yml        # 14 services
+\end{lstlisting}
+
+\section{DATABASE SCHEMA}
+
+\begin{longtable}{@{}P{3.5cm}P{1.9cm}P{1.5cm}P{6.2cm}@{}}
+\caption{Table Catalog (20 tables)}\label{tab:tables}\\
+\toprule
+\textbf{Table} & \textbf{Columns} & \textbf{Rows} & \textbf{Purpose} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Table} & \textbf{Columns} & \textbf{Rows} & \textbf{Purpose} \\
+\midrule
+\endhead
+assets & 12 & 32 & Asset metadata \\
+telemetry & 18 & 1M+ & Time-series sensor data \\
+events & 14 & 500K+ & Event stream \\
+iocs & 10 & 50K+ & Indicators of compromise \\
+detections & 16 & 100K+ & Rule and ML detections \\
+triage & 12 & 100K+ & Auto-triage outcomes \\
+ml explanations & 8 & 500K+ & SHAP attributions \\
+model registry & 10 & 16 & Trained model metadata \\
+story narratives & 8 & 10K+ & LLM-generated stories \\
+soar actions & 12 & 5K+ & SOAR execution audit \\
+incident clusters & 8 & 2K+ & Correlated incidents \\
+geofences & 8 & 20 & Zone definitions \\
+auth tokens & 6 & 100 & JWT management \\
+audit log & 10 & 1M+ & Immutable event log \\
+threat feeds & 8 & 3 & Feed configuration \\
+blast radii & 6 & 50K+ & Computed blast radius \\
+weather cache & 6 & 10K+ & Open-Meteo cache \\
+model metrics & 8 & 16 & Per-model KPIs \\
+alert rules & 10 & 13 & Rule definitions \\
+users & 8 & 5 & Operator accounts \\
+\bottomrule
+\end{longtable}
+
+\section{WAZUH AND SURICATA INTEGRATION}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.98\textwidth]{wazuh_flow.png}
+\caption{Wazuh manager, agents and SSCDT API flow.}
+\label{fig:wazuh}
+\end{figure}
+
+\section{SOAR PLAYBOOK ENGINE}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.98\textwidth]{soar_flow.png}
+\caption{SOAR engine state machine and playbook catalog.}
+\label{fig:soar}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{SOAR Playbook Summary}
+\label{tab:playbooks}
+\begin{tabular}{@{}P{4.2cm}P{4cm}P{4.6cm}@{}}
+\toprule
+\textbf{Playbook} & \textbf{Trigger} & \textbf{Actions} \\
+\midrule
+block malicious ip & P1/P2 + IPv4 & AWS WAF + SG + Slack \\
+isolate vehicle gateway & VGW compromise & MQTT + Ditto quarantine \\
+revoke auth token & Auth anomaly & IdP + Redis blacklist \\
+quarantine container & Container anomaly & Docker pause \\
+escalate p1 incident & P1 severity & PagerDuty + Jira \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\chapter{RESULTS AND DISCUSSION}
+% ============================================================
+
+\section{EXPERIMENTAL RESULTS}
+
+SSCDT was evaluated in a controlled session that processed 200 telemetry events.
+
+\subsection{DETECTION PERFORMANCE SUMMARY}
+
+\begin{table}[H]
+\centering
+\caption{Detection Results Across Attack Categories (200-Event Session)}
+\label{tab:detection}
+\small
+\begin{tabular}{@{}P{3.4cm}ccP{1.6cm}P{3.4cm}@{}}
+\toprule
+\textbf{Category} & \textbf{Injected} & \textbf{Blocked} & \textbf{DR} & \textbf{Blocking Layer} \\
+\midrule
+Valid frames (signed) & 50 & 0 (all verified) & 100\% TN & L5 Intel Verify \\
+DoS attack & 50 & 50 & 100\% & L1 + L2 \\
+Fuzzy attack & 71 & 71 & 100\% & L2 ML ensemble \\
+Rules blocked & 79 & 79 & 100\% & L1, L3, L4 \\
+AI blocked total & 121 & 121 & 98.5\% conf. & L2 ML ensemble \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{ML ENSEMBLE EVALUATION}
+
+\begin{figure}[H]
+\centering
+\figplaceholder[0.8\textwidth]{confusion_matrix.png}
+\caption{ML ensemble confusion matrix on the 100,000-vector test set.}
+\label{fig:confusion}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{ML Ensemble Confusion Matrix}
+\label{tab:confusion_matrix}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & \textbf{Pred: Normal} & \textbf{Pred: DoS} & \textbf{Pred: Fuzzy} & \textbf{Pred: Imp.} \\
+\midrule
+\textbf{True: Normal} & 22,914 & 1,464 & 691 & 0 \\
+\textbf{True: DoS} & 142 & 23,586 & 1,270 & 0 \\
+\textbf{True: Fuzzy} & 156 & 1,224 & 23,675 & 0 \\
+\textbf{True: Imp.} & 0 & 0 & 0 & 24,878 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Per-class accuracy (recall) computed from the matrix: Normal 91.4\%, DoS 94.4\%, Fuzzy 94.5\% and Impersonation 100.0\%, for an overall accuracy of 95.05\%.
+
+\subsection{PER-CLASS CLASSIFICATION REPORT}
+
+\begin{table}[H]
+\centering
+\caption{Per-Class Classification Report (derived from Table~\ref{tab:confusion_matrix})}
+\label{tab:classification_report}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
+\midrule
+Normal (0) & 0.987 & 0.914 & 0.949 & 25,069 \\
+DoS (1) & 0.898 & 0.944 & 0.920 & 24,998 \\
+Fuzzy (2) & 0.924 & 0.945 & 0.934 & 25,055 \\
+Impersonation (3) & 1.000 & 1.000 & 1.000 & 24,878 \\
+\midrule
+Macro avg & 0.952 & 0.951 & 0.951 & 100,000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{ML MODEL COMPARISON}
+
+\begin{table}[H]
+\centering
+\caption{Classifier Comparison on the SSCDT Testbed Dataset}
+\label{tab:comparison_ml}
+\small
+\begin{tabular}{@{}lccccP{3.6cm}@{}}
+\toprule
+\textbf{Model} & \textbf{Acc} & \textbf{Prec} & \textbf{Rec} & \textbf{F1} & \textbf{Notes} \\
+\midrule
+Naive Bayes & 0.85 & 0.85 & 0.85 & 0.85 & Assumes feature independence \\
+Logistic Regression & 0.88 & 0.88 & 0.88 & 0.88 & Poor on non-linear boundaries \\
+Random Forest & 0.91 & 0.91 & 0.91 & 0.91 & 3x inference latency vs IF \\
+XGBoost & 0.93 & 0.93 & 0.93 & 0.93 & Higher memory (6.8 MB) \\
+\textbf{IF + SVM ensemble} & \textbf{0.95} & \textbf{0.95} & \textbf{0.95} & \textbf{0.95} & \textbf{Selected for L2} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{PER-LAYER THROUGHPUT ANALYSIS}
+
+\begin{table}[H]
+\centering
+\caption{Per-Layer Throughput Analysis}
+\label{tab:throughput}
+\small
+\begin{tabular}{@{}lcccP{3.6cm}@{}}
+\toprule
+\textbf{Layer} & \textbf{Input} & \textbf{Output} & \textbf{Latency} & \textbf{Method} \\
+\midrule
+L1 (Rules) & 200 & 121 & $<$0.01 ms & Hash-table lookup \\
+L2 (ML) & 121 & 50 & 0.83 ms & 14-feature inference \\
+L3 (Length) & 50 & 50 & $<$0.01 ms & Constant-time check \\
+L4 (Anti-Replay) & 50 & 50 & $<$0.01 ms & Counter comparison \\
+L5 (Intel) & 50 & 50 & 0.41 ms & API consensus \\
+\midrule
+Total & 200 & 50 & 1.25 ms & End-to-end pipeline \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{CPU AND MEMORY OVERHEAD}
+
+Resource usage averaged 11.3\% CPU, under the 15\% threshold. Peak memory was 187~MB out of 4~GB.
+
+\section{DISCUSSION}
+
+\subsection{COMPARISON AGAINST EVALUATION TARGETS}
+
+\begin{table}[H]
+\centering
+\caption{Achieved vs Target Metric Values}
+\label{tab:targets}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Metric} & \textbf{Target} & \textbf{Achieved} & \textbf{Assessment} \\
+\midrule
+Detection rate (TPR) & $>$98\% & 100\% & Exceeded \\
+False positive rate & $<$2\% & 0\% & Exceeded \\
+AI confidence & $>$95\% & 98.5\% & Exceeded \\
+ML accuracy & $>$0.95 & 0.951 & Met \\
+End-to-end latency & $<$5 ms & 1.25 ms & Exceeded \\
+CPU overhead & $<$15\% & 11.3\% & Met \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{LIMITATIONS AND MITIGATIONS}
+
+\begin{itemize}
+    \item \textbf{Simulated telemetry only.} The main experimental data is synthetic.
+    \item \textbf{Symmetric key management.} A single shared key is used for all nodes.
+    \item \textbf{Training data coverage.} Models are trained on a fixed testbed corpus.
+    \item \textbf{Adversarial robustness.} Testing against GAN-generated frames is future work.
+\end{itemize}
+
+% ============================================================
+\chapter{CONCLUSION AND FUTURE WORK}
+% ============================================================
+
+\section{CONCLUSIONS}
+
+SSCDT shows that a practical five-layer hybrid defense platform for supply chain cyber-physical systems can run on off-the-shelf hardware. Its two-unit design keeps telemetry generation and signing separate from detection and policy enforcement.
+
+\textbf{Cryptographic integrity.} The signature-verification layer, with keys and freshness counters, provides standards-based authentication.
+
+\textbf{Deterministic policy enforcement.} The L1, L3 and L4 layers blocked 39.5\% of the traffic in the 200-event session without invoking AI inference.
+
+\textbf{AI-driven zero-day detection.} The 16-model ensemble reached about 0.95 accuracy, precision, recall and F1 on the test set.
+
+\textbf{Cloud-backed operations.} AWS OTA integration, HSM key storage and automated forensic PDF reporting support day-to-day operation.
+
+\section{SCOPE FOR FURTHER WORK}
+
+\begin{enumerate}
+    \item \textbf{Group key integration:} dynamic per-ECU key establishment.
+    \item \textbf{CAN FD support:} extend the pipeline to CAN FD.
+    \item \textbf{Federated learning:} gradient updates from deployed nodes.
+    \item \textbf{Adversarial robustness:} GAN-based training and testing.
+    \item \textbf{Live AWS deployment:} pending production account approval.
+    \item \textbf{Publication:} submit to ACSAC, RAID or CPS-SPC.
+\end{enumerate}
+
+% ============================================================
+% REFERENCES
+% ============================================================
+\begin{thebibliography}{99}
+
+\bibitem{ref1}
+R. Silva et al., ``AI-driven Digital Twin-Based SOAR for Critical Infrastructures,'' \textit{Automated Software Engineering}, Springer, 2026.
+
+\bibitem{ref2}
+M. Khan et al., ``Digital Twin-Enabled Incident Detection and Response: A Systematic Review,'' \textit{Heliyon}, Elsevier, 2025.
+
+\bibitem{ref3}
+J. Su\'arez-Rom\'an et al., ``A Digital Twin Threat Survey,'' \textit{Big Data and Cognitive Computing}, MDPI, 2025.
+
+\bibitem{ref4}
+Y. Qin et al., ``Advancing Security with Digital Twins: A Comprehensive Survey,'' \textit{arXiv}, 2025.
+
+\bibitem{ref5}
+Y. Zhang et al., ``A Review of Digital Twins and Their Application in Cybersecurity Based on AI,'' \textit{Artificial Intelligence Review}, Springer, 2024.
+
+\bibitem{ref6}
+M. Abdel-Basset et al., ``Cyber-Twin: Digital Twin-Boosted Autonomous Attack Detection for VANETs,'' \textit{arXiv}, 2024.
+
+\bibitem{ref7}
+A. Hassan et al., ``Digital Twin-Enhanced Incident Response for Cyber-Physical Systems,'' \textit{ACM Trans. Cyber-Physical Systems}, 2023.
+
+\bibitem{ref8}
+C. Alcaraz and J. Lopez, ``Digital Twin: A Comprehensive Survey of Security Threats,'' \textit{IEEE Communications Surveys \& Tutorials}, 2022.
+
+\bibitem{ref9}
+J. Leite et al., ``Actionable Cyber Threat Intelligence for Automated Incident Response,'' \textit{NordSec}, Springer, 2022.
+
+\bibitem{ref10}
+X. Bai et al., ``Cybonto: Towards Human Cognitive Digital Twins for Cybersecurity,'' \textit{IEEE Access}, 2021.
+
+\bibitem{ref11}
+D. Holmes et al., ``HySecTwin: A Knowledge-Driven Digital Twin Framework,'' \textit{arXiv}, 2026.
+
+\bibitem{ref12}
+Z. Wang et al., ``Leveraging Digital Twin Technology for Enhanced Cybersecurity in CPPS,'' \textit{MDPI Computers}, vol. 13, no. 11, 2024.
+
+\bibitem{ref13}
+P. Pradoglou et al., ``Leveraging Digital Twin Technologies for Public Space Protection,'' \textit{arXiv}, 2024.
+
+\bibitem{ref14}
+A. Ghaffar et al., ``Leveraging Digital Twins for Advanced Threat Modeling,'' \textit{Intl. J. of Information Security}, 2024.
+
+\bibitem{ref15}
+M. Sachsenhauser et al., ``Cybersecurity Digital Twins for Industrial Systems,'' \textit{MDPI Information}, vol. 17, no. 3, 2026.
+
+\bibitem{ref16}
+M. El Hajji et al., ``Digital Twins' Role in Enhancing Security for Industry 4.0,'' \textit{Security and Privacy}, Wiley, 2024.
+
+\bibitem{ref17}
+A. Lawal et al., ``Digital Twins and Their Application in Cybersecurity Based on AI: A Review,'' \textit{arXiv}, 2024.
+
+\bibitem{ref18}
+P. Almeida et al., ``A Cognitive Platform for Collecting Cyber Threat Intelligence,'' \textit{Decision Analytics Journal}, 2025.
+
+\bibitem{ref19}
+F. Kamm\"uller et al., ``Improving Quality of Indicators of Compromise Using STIX Graphs,'' \textit{Computers \& Security}, 2024.
+
+\bibitem{ref20}
+MITRE Corporation, ``MITRE ATT\&CK Framework,'' 2024. [Online]. Available: https://attack.mitre.org
+
+\bibitem{ref21}
+L. Bass, P. Clements and R. Kazman, \textit{Software Architecture in Practice}, 4th ed., Addison-Wesley, 2021.
+
+\bibitem{ref22}
+S. Newman, \textit{Building Microservices}, 2nd ed., O'Reilly, 2021.
+
+\end{thebibliography}
+
+% ============================================================
+% APPENDICES
+% ============================================================
+\appendix
+
+\chapter{Verification Commands}
+
+\begin{lstlisting}[language=bash, caption={7-gap verification}]
+# 1. Run the comprehensive 7-gap verification engine
+python scripts/full_verification.py
+
+# 2. Run the complete pytest test suite (192 passing tests)
+pytest -q
+
+# 3. Verify the release Git tag
+git describe --tags --always
+# Output: v2.0.0-phase2
+\end{lstlisting}
+
+\chapter{Repository Links}
+
+\begin{itemize}
+    \item \textbf{GitHub:} \url{https://github.com/Sudharsan1122/smart-supply-chain-cyber-digital-twin}
+    \item \textbf{Live dashboard:} \url{http://localhost:5000}
+    \item \textbf{API docs:} \url{http://localhost:8000/docs}
+    \item \textbf{Ditto UI:} \url{http://localhost:8080}
+\end{itemize}
+
+\chapter{Source Code Structure}
+
+\begin{lstlisting}[language={}, caption={SSCDT source code organization}]
+SSCDT/
+|-- modules/
+|   |-- digital_twin/
+|   |   |-- networkx_graph.py     # 32-asset directed graph
+|   |   |-- ditto_sync.py         # Bidirectional Ditto sync
+|   |   `-- blast_radius.py       # BFS + decay computation
+|   |-- ml/
+|   |   |-- feature_extractors/   # 8 asset-type extractors
+|   |   |-- trainer.py            # 16-model training
+|   |   |-- detector.py           # Runtime inference
+|   |   `-- explainability.py     # SHAP integration
+|   |-- detection/
+|   |   |-- rules_engine.py       # 13 deterministic rules
+|   |   `-- risk_scoring.py       # C8 algorithm
+|   |-- api_sources/
+|   |   |-- wazuh_client.py       # Wazuh 4.7 API
+|   |   |-- suricata_client.py    # EVE JSON parser
+|   |   `-- threat_intel.py       # VirusTotal, AbuseIPDB, OTX
+|   |-- soar/
+|   |   |-- engine.py             # YAML playbook executor
+|   |   `-- playbooks/            # 5 starter playbooks
+|   `-- dashboard/
+|       |-- app.py                # Flask server
+|       `-- templates/            # 5-tab UI
+|-- tests/
+|   |-- unit/                     # 118 unit tests
+|   |-- integration/              # 42 integration tests
+|   `-- e2e/                      # 18 end-to-end tests
+|-- docker-compose.yml            # 14 services
+`-- requirements.txt              # 50+ dependencies
+\end{lstlisting}
+
+\chapter{Plagiarism Report}
+
+\textit{[Insert the Turnitin originality report here.]}
+
+\end{document}

@@ -1,0 +1,44 @@
+% ============================================================
+%  frontmatter/abbreviations.tex - Symbols & Abbreviations
+% ============================================================
+
+\renewenvironment{abbreviations}{%
+  \newpage
+  \chapter*{\large LIST OF SYMBOLS AND ABBREVIATIONS}%
+  \addcontentsline{toc}{chapter}{LIST OF SYMBOLS AND ABBREVIATIONS}%
+  \begin{tabular}{@{}p{2.8cm}p{0.5cm}p{10.2cm}@{}}%
+}{%
+  \end{tabular}%
+}
+
+\begin{abbreviations}
+\textbf{AEAD}     & - \quad & Authenticated Encryption with Associated Data \\
+\textbf{AES}      & - \quad & Advanced Encryption Standard (FIPS 197) \\
+\textbf{AOSP}     & - \quad & Android Open Source Project \\
+\textbf{CRQC}     & - \quad & Cryptographically Relevant Quantum Computer \\
+\textbf{DFD}      & - \quad & Data Flow Diagram \\
+\textbf{DNS}      & - \quad & Domain Name System \\
+\textbf{FIPS}     & - \quad & Federal Information Processing Standards \\
+\textbf{FSM}      & - \quad & Finite State Machine \\
+\textbf{GCM}      & - \quad & Galois/Counter Mode \\
+\textbf{HKDF}     & - \quad & HMAC-based Key Derivation Function (RFC 5869) \\
+\textbf{HNDL}     & - \quad & Harvest Now, Decrypt Later \\
+\textbf{IND-CCA2} & - \quad & Indistinguishability under Adaptive Chosen Ciphertext Attack \\
+\textbf{IP}       & - \quad & Internet Protocol \\
+\textbf{JNI}      & - \quad & Java Native Interface \\
+\textbf{KEM}      & - \quad & Key Encapsulation Mechanism \\
+\textbf{ML-DSA}   & - \quad & Module-Lattice Digital Signature Algorithm (FIPS 204) \\
+\textbf{ML-KEM}   & - \quad & Module-Lattice Key Encapsulation Mechanism (FIPS 203) \\
+\textbf{M-LWE}    & - \quad & Module Learning with Errors \\
+\textbf{MTU}      & - \quad & Maximum Transmission Unit \\
+\textbf{NAT}      & - \quad & Network Address Translation \\
+\textbf{NIST}     & - \quad & National Institute of Standards and Technology \\
+\textbf{PQC}      & - \quad & Post-Quantum Cryptography \\
+\textbf{PRNG}     & - \quad & Pseudorandom Number Generator \\
+\textbf{RFC}      & - \quad & Request for Comments \\
+\textbf{RTM}      & - \quad & Requirement Traceability Matrix \\
+\textbf{SHA}      & - \quad & Secure Hash Algorithm \\
+\textbf{TCP}      & - \quad & Transmission Control Protocol \\
+\textbf{TUN}      & - \quad & Network Tunnel Virtual Device Driver \\
+\textbf{VPN}      & - \quad & Virtual Private Network \\
+\end{abbreviations}

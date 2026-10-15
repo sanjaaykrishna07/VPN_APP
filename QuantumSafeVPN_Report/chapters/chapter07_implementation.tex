@@ -1,0 +1,175 @@
+% ============================================================
+%  CHAPTER 7: IMPLEMENTATION DETAILS
+% ============================================================
+
+\chapter{IMPLEMENTATION DETAILS}
+\label{chap:implementation}
+
+\section{System Architecture and Repository Layout}
+\label{sec:directory_structure}
+
+The QuantumSafe VPN codebase is organized into two primary sub-projects: the native Kotlin Android mobile client and the companion Python Linux gateway server (Table~\ref{tab:repo_layout}).
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \setlength{\tabcolsep}{3pt}
+  \caption{Project Codebase Layout and Key Component Responsibilities.}
+  \label{tab:repo_layout}
+  \begin{tabularx}{\linewidth}{@{}p{3.2cm}p{3.4cm}Y@{}}
+    \toprule
+    \textbf{Subdirectory / Path} & \textbf{Component Name} & \textbf{Primary Engineering Responsibility} \\
+    \midrule
+    \texttt{android/}\allowbreak\texttt{app/}\allowbreak\texttt{src/.../}\allowbreak\texttt{vpn} & \texttt{QuantumSafe}\allowbreak\texttt{VpnService.kt} & Manages TUN interface lifecycle, socket protection, and packet loops. \\
+    \texttt{android/}\allowbreak\texttt{app/.../}\allowbreak\texttt{crypto} & \texttt{PqcEngine.kt} & Pure-Kotlin ML-KEM, ML-DSA, Keccak SHA3-256, and AES-GCM engine. \\
+    \texttt{android/}\allowbreak\texttt{app/.../}\allowbreak\texttt{ui} & \texttt{HomeScreen}, \texttt{Theme.kt} & Jetpack Compose declarative UI screens and minimal white design tokens. \\
+    \texttt{android/}\allowbreak\texttt{app/.../}\allowbreak\texttt{storage} & \texttt{Security}\allowbreak\texttt{Manager.kt} & Hardware-backed Android Keystore configuration encryption. \\
+    \texttt{vpn/}\allowbreak\texttt{tunnel\_}\allowbreak\texttt{server.py} & Linux Gateway Daemon & Multi-client TCP listener, PQC handshake dispatch, and TUN routing. \\
+    \texttt{vpn/}\allowbreak\texttt{ip\_pool.py} & Dynamic IP Lease Manager & Thread-safe allocation and reclamation of 10.8.0.0/24 client virtual IPs. \\
+    \texttt{pqc/}\allowbreak\texttt{mlkem.py,}\allowbreak\texttt{mldsa.py} & Python PQC Modules & ML-KEM-1024 encapsulation/decapsulation and ML-DSA-65 identity signing. \\
+    \texttt{crypto/}\allowbreak\texttt{classical.py} & Classical Cryptography & HKDF-SHA256 session key expansion and AES-256-GCM AEAD framing. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Android VpnService Lifecycle and Socket Protection}
+\label{sec:core_vpn_service_impl}
+
+The Android client extends \texttt{android.net.VpnService}. Under Android 14 (API Level 34), foreground services must declare explicit types in the app's \texttt{Android}\allowbreak\texttt{Manifest}\allowbreak\texttt{.xml}:
+\begin{lstlisting}[language=XML, basicstyle=\ttfamily\scriptsize]
+<service android:name=".QuantumSafeVpnService"
+    android:permission="android.permission.BIND_VPN_SERVICE"
+    android:foregroundServiceType="systemExempted"
+    android:exported="false">
+    <intent-filter><action android:name="android.net.VpnService" /></intent-filter>
+</service>
+\end{lstlisting}
+The \texttt{systemExempted} foreground type prevents OS battery optimization daemons from freezing the tunnel transport during long periods of background execution.
+
+\subsection{Kernel-Level Socket Protection Bypass}
+To prevent an infinite routing loop where encrypted tunnel packets are routed back into the virtual TUN interface, \texttt{QuantumSafeVpnService} invokes the native \texttt{protect()} system call prior to initiating TCP transport:
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily\scriptsize]
+val socket = Socket()
+if (!protect(socket)) {
+    throw IllegalStateException("Critical failure: Failed to protect transport socket!")
+}
+socket.tcpNoDelay = true // Disable Nagle's algorithm for low-latency transmission
+socket.connect(InetSocketAddress(serverHost, serverPort), 10000)
+\end{lstlisting}
+Enabling \texttt{tcpNoDelay} eliminates artificial 40\,ms buffering delays for interactive frames.
+
+\section[Pure-Kotlin Post-Quantum Handshake Engine]{Pure-Kotlin Post-Quantum Handshake Engine}
+\label{sec:pqc_engine_impl}
+
+Listing~\ref{lst:handshake_pqc_engine} illustrates the execution of the 4-stage post-quantum handshake inside \texttt{PqcEngine.kt} over the protected transport socket.
+
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily\scriptsize, caption={4-Stage Post-Quantum Handshake Execution in PqcEngine.kt.}, label={lst:handshake_pqc_engine}]
+fun performHandshake(socket: Socket): HandshakeResult {
+    val inputStream = DataInputStream(socket.getInputStream())
+    val outputStream = DataOutputStream(socket.getOutputStream())
+
+    // Stage 1: Receive ML-DSA-65 Server Public Key (1952 Bytes)
+    val serverDsaPk = readFrame(inputStream)
+    if (serverDsaPk.size != 1952) throw SecurityException("Invalid ML-DSA key size")
+
+    // Stage 2: Generate Ephemeral ML-KEM-1024 Keypair & Transmit Public Key (1568 Bytes)
+    val (kemPk, kemSk) = generateMlkemKeypair()
+    sendFrame(outputStream, kemPk)
+
+    // Stage 3: Receive Ciphertext (1568 Bytes) and Server Signature (3309 Bytes)
+    val ciphertext = readFrame(inputStream)
+    val signature = readFrame(inputStream)
+    val transcript = "QuantumSafeVPN-v1".toByteArray(Charsets.UTF_8) + kemPk + ciphertext
+    if (!verifyMldsa(serverDsaPk, transcript, signature)) {
+        throw SecurityException("Server identity verification failed! Invalid signature.")
+    }
+
+    // Decapsulate Shared Secret & Receive Assigned IP Configuration
+    val sharedSecret = decapsulateMlkem(kemSk, ciphertext)
+    val config = parseConfigJson(readFrame(inputStream))
+    val sessionKey = deriveSessionKey(sharedSecret) // HKDF-SHA256 expansion
+
+    return HandshakeResult(sessionKey, config)
+}
+\end{lstlisting}
+
+\section[Pure-Kotlin Keccak-f[1600] Sponge Implementation]{Pure-Kotlin Keccak-$f[1600]$ Sponge Implementation}
+\label{sec:keccak_sponge_impl}
+
+To guarantee bit-level parity with Python's \texttt{hashlib.sha3\_256}, \texttt{PqcEngine} incorporates a pure-Kotlin implementation of the NIST FIPS 202 Keccak sponge permutation:
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily\scriptsize]
+private fun keccakF1600(state: LongArray) {
+    for (round in 0 until 24) {
+        val c = LongArray(5) { x ->
+            state[x] xor state[x+5] xor state[x+10] xor state[x+15] xor state[x+20]
+        }
+        for (x in 0 until 5) {
+            val d = c[(x + 4) % 5] xor java.lang.Long.rotateLeft(c[(x + 1) % 5], 1)
+            for (y in 0 until 5) state[x + 5 * y] = state[x + 5 * y] xor d
+        }
+        val b = LongArray(25) { i ->
+            val x = i % 5; val y = i / 5
+            java.lang.Long.rotateLeft(state[x + 5 * y], KECCAK_ROTATION_CONSTANTS[x][y])
+        }
+        for (x in 0 until 5) {
+            for (y in 0 until 5) state[x + 5 * y] = b[x + 5 * y] xor (b[(x + 1) % 5 + 5 * y].inv() and b[(x + 2) % 5 + 5 * y])
+        }
+        state[0] = state[0] xor KECCAK_ROUND_CONSTANTS[round]
+    }
+}
+\end{lstlisting}
+
+\section[Bidirectional Forwarding and Packet Framing]{Bidirectional Forwarding and Packet Framing}
+\label{sec:packet_forwarding_loop}
+
+Once \texttt{VpnService.Builder} establishes the virtual \texttt{tun0} interface, two concurrent coroutine workers are launched on \texttt{Dispatchers.IO}. Listing~\ref{lst:uplink_worker} illustrates the uplink forwarding pipeline.
+
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily\scriptsize, caption={Uplink Packet Forwarding and AEAD Encapsulation Worker.}, label={lst:uplink_worker}]
+private fun CoroutineScope.launchUplinkWorker(pfd: ParcelFileDescriptor, socket: Socket, pqcEngine: PqcEngine) = launch(Dispatchers.IO) {
+    val inputStream = FileInputStream(pfd.fileDescriptor)
+    val outputStream = DataOutputStream(socket.getOutputStream())
+    val buffer = ByteArray(32767)
+
+    while (isActive && isRunning) {
+        val bytesRead = inputStream.read(buffer)
+        if (bytesRead > 0) {
+            val rawPacket = buffer.copyOf(bytesRead)
+            val seq = sendSequenceCounter.incrementAndGet()
+            val encryptedFrame = pqcEngine.encryptPacket(rawPacket, seq) // AES-GCM + IV + Tag
+
+            synchronized(outputStream) {
+                outputStream.writeInt(encryptedFrame.size)
+                outputStream.write(encryptedFrame)
+                outputStream.flush()
+            }
+            totalBytesSent.addAndGet(encryptedFrame.size.toLong())
+        }
+    }
+}
+\end{lstlisting}
+
+\section{Python Linux Gateway Daemon Implementation}
+\label{sec:python_gateway_impl}
+
+On the server, \texttt{vpn/tunnel\_server.py} manages incoming client connections using Python's \texttt{threading} architecture. Listing~\ref{lst:python_server_handler} details client dispatching and sequence verification.
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\scriptsize, caption={Python Linux Gateway Client Handler and Replay Validation.}, label={lst:python_server_handler}]
+def handle_client_connection(tun, conn, addr):
+    try:
+        session_key, assigned_ip = perform_handshake(conn, addr)
+        session_router.register_client(assigned_ip, conn, session_key)
+        last_seq = 0
+        while True:
+            encrypted_frame = recv_frame(conn)
+            plaintext = decrypt(session_key, encrypted_frame) # AES-256-GCM verification
+            seq = struct.unpack("!Q", plaintext[:8])[0]
+            if seq <= last_seq:
+                continue # Discard out-of-order or replayed packet
+            last_seq = seq
+            tun.write_packet(plaintext[8:]) # Forward IPv4 packet into Linux tun0
+    finally:
+        session_router.unregister_client(assigned_ip)
+        ip_pool.release(assigned_ip)
+        conn.close()
+\end{lstlisting}
+The kernel routes outbound packets via \texttt{iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE}. Production APKs are compiled using Gradle 8.9 and R8 shrinking, yielding an optimized 13.4\,MB binary.

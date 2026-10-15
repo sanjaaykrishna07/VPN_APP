@@ -1,0 +1,73 @@
+{
+  "mlkem_1024": [
+    {
+      "operation": "ML-KEM-1024 KeyGen",
+      "iterations": 30,
+      "total_seconds": 0.0003,
+      "avg_ms": 0.009,
+      "ops_per_sec": 106420.7
+    },
+    {
+      "operation": "ML-KEM-1024 Encapsulate",
+      "iterations": 30,
+      "total_seconds": 0.0005,
+      "avg_ms": 0.017,
+      "ops_per_sec": 60204.7
+    },
+    {
+      "operation": "ML-KEM-1024 Decapsulate",
+      "iterations": 30,
+      "total_seconds": 0.0003,
+      "avg_ms": 0.01,
+      "ops_per_sec": 101078.2
+    }
+  ],
+  "mldsa_65": [
+    {
+      "operation": "ML-DSA-65 KeyGen",
+      "iterations": 20,
+      "total_seconds": 0.0003,
+      "avg_ms": 0.015,
+      "ops_per_sec": 68236.1
+    },
+    {
+      "operation": "ML-DSA-65 Sign (Handshake)",
+      "iterations": 20,
+      "total_seconds": 0.0006,
+      "avg_ms": 0.032,
+      "ops_per_sec": 31007.8
+    },
+    {
+      "operation": "ML-DSA-65 Verify (Handshake)",
+      "iterations": 20,
+      "total_seconds": 0.0,
+      "avg_ms": 0.001,
+      "ops_per_sec": 925918.9
+    }
+  ],
+  "hkdf_sha256": [
+    {
+      "operation": "HKDF-SHA256 Session KDF",
+      "iterations": 100,
+      "total_seconds": 0.0021,
+      "avg_ms": 0.021,
+      "ops_per_sec": 46698.4
+    }
+  ],
+  "aes_256_gcm": [
+    {
+      "operation": "AES-256-GCM Encrypt (1400B MTU)",
+      "iterations": 200,
+      "total_seconds": 0.0046,
+      "avg_ms": 0.023,
+      "ops_per_sec": 43168.6
+    },
+    {
+      "operation": "AES-256-GCM Decrypt (1400B MTU)",
+      "iterations": 200,
+      "total_seconds": 0.0039,
+      "avg_ms": 0.019,
+      "ops_per_sec": 51884.7
+    }
+  ]
+}

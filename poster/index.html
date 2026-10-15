@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuantumSafe VPN - A3 Project Poster</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       A3 LANDSCAPE PRINT & PRESENTATION STYLES (420mm x 297mm)
+       ========================================================================== */
+    @page {
+      size: 420mm 297mm;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    :root {
+      --bg-cream: #F8F6F0;
+      --card-bg: #FFFFFF;
+      --amrita-red: #B82432;
+      --amrita-red-dark: #981B27;
+      --amrita-red-light: #CF3242;
+      --charcoal-dark: #121519;
+      --charcoal-card: #181C21;
+      --charcoal-border: #2B313A;
+      --text-dark: #1A1E23;
+      --text-muted: #5F666E;
+      --text-light-muted: #959DA6;
+      --border-light: #E3DFD3;
+      --shadow-sm: 0 4px 22px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 10px 32px rgba(0, 0, 0, 0.08);
+    }
+
+    html, body {
+      width: 420mm;
+      height: 297mm;
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-cream);
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      color: var(--text-dark);
+      overflow: hidden;
+    }
+
+    .poster-container {
+      width: 420mm;
+      height: 297mm;
+      padding: 11mm 13mm;
+      display: flex;
+      flex-direction: column;
+      gap: 9mm;
+      position: relative;
+    }
+
+    /* TOP ROW: 3 Cards (Hero Red Card, Project Overview & Goals, Architecture Mind Map) */
+    .row-top {
+      display: flex;
+      gap: 9mm;
+      height: 168mm;
+    }
+
+    /* BOTTOM ROW: 2 Cards (Impact & Conclusion, Insights & Results) */
+    .row-bottom {
+      display: flex;
+      gap: 9mm;
+      height: 98mm;
+    }
+
+    /* Common Card Styling */
+    .card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      border: 1px solid var(--border-light);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Section Headings */
+    .card-header {
+      margin-bottom: 2.5mm;
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 21pt;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .card-title .red-text {
+      color: var(--amrita-red);
+    }
+
+    .card-subtitle {
+      font-size: 8.5pt;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 1mm;
+      font-weight: 500;
+    }
+
+    /* ==========================================================================
+       CARD 1: MAIN HERO RED CARD (Amrita Red)
+       ========================================================================== */
+    .card-hero {
+      flex: 0 0 114mm;
+      background: linear-gradient(150deg, var(--amrita-red-light) 0%, var(--amrita-red) 50%, var(--amrita-red-dark) 100%);
+      color: #FFFFFF;
+      padding: 6.5mm 7.5mm;
+      border: none;
+      box-shadow: 0 12px 36px rgba(184, 36, 50, 0.28);
+      justify-content: space-between;
+    }
+
+    /* Institutional Badge */
+    .hero-inst-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3.5mm;
+      background: #FFFFFF;
+      padding: 2mm 4.5mm;
+      border-radius: 999px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+      width: fit-content;
+    }
+
+    .hero-inst-badge img {
+      height: 7.2mm;
+      width: auto;
+      object-fit: contain;
+    }
+
+    .hero-inst-text {
+      font-family: 'Outfit', sans-serif;
+      font-size: 7.4pt;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: var(--amrita-red-dark);
+      text-transform: uppercase;
+    }
+
+    /* Project Main Title */
+    .hero-title-block {
+      margin-top: 2.5mm;
+      margin-bottom: 2mm;
+    }
+
+    .hero-main-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20pt;
+      font-weight: 900;
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+      text-transform: uppercase;
+      color: #FFFFFF;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.22);
+    }
+
+    .hero-sub-title {
+      font-size: 9.8pt;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.94);
+      margin-top: 1.8mm;
+      letter-spacing: 0.01em;
+      line-height: 1.35;
+    }
+
+    /* How to Use Section */
+    .hero-steps-block {
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 14px;
+      padding: 3.5mm 4mm;
+      margin: 1.5mm 0;
+      backdrop-filter: blur(8px);
+    }
+
+    .hero-steps-heading {
+      font-size: 9pt;
+      font-weight: 800;
+      margin-bottom: 2mm;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 1.8mm;
+      color: #FFFFFF;
+      text-transform: uppercase;
+    }
+
+    .hero-step-item {
+      display: flex;
+      align-items: center;
+      gap: 2.5mm;
+      font-size: 8.2pt;
+      font-weight: 500;
+      margin-bottom: 1.5mm;
+      line-height: 1.25;
+      color: rgba(255, 255, 255, 0.96);
+    }
+
+    .hero-step-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .step-circle {
+      width: 4.8mm;
+      height: 4.8mm;
+      border-radius: 50%;
+      background: #FFFFFF;
+      color: var(--amrita-red-dark);
+      font-weight: 800;
+      font-size: 7.2pt;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.18);
+    }
+
+    /* Authors & QR Bottom Row */
+    .hero-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-top: 2.5mm;
+      border-top: 1px solid rgba(255, 255, 255, 0.28);
+    }
+
+    .hero-authors {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2mm;
+    }
+
+    .authors-label {
+      font-size: 7.2pt;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .author-name {
+      font-size: 8.8pt;
+      font-weight: 700;
+      color: #FFFFFF;
+      letter-spacing: 0.01em;
+      line-height: 1.2;
+    }
+
+    .author-roll {
+      font-size: 7pt;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.85);
+      margin-left: 1mm;
+    }
+
+    .author-guide {
+      font-size: 7.8pt;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.94);
+      margin-top: 0.8mm;
+    }
+
+    .hero-qrs {
+      display: flex;
+      gap: 2.5mm;
+    }
+
+    .qr-box {
+      background: #FFFFFF;
+      padding: 1.2mm;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+      text-align: center;
+    }
+
+    .qr-box img {
+      width: 14mm;
+      height: 14mm;
+      display: block;
+      border-radius: 4px;
+    }
+
+    .qr-label {
+      font-size: 5.8pt;
+      font-weight: 800;
+      color: var(--charcoal-dark);
+      margin-top: 0.8mm;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* ==========================================================================
+       CARD 2: PROJECT OVERVIEW & GOALS & KPIS
+       ========================================================================== */
+    .card-overview {
+      flex: 0 0 116mm;
+      padding: 6.5mm 7.5mm;
+      justify-content: space-between;
+    }
+
+    .body-paragraph {
+      font-size: 9.1pt;
+      line-height: 1.5;
+      color: #2F343B;
+      text-align: left;
+      margin-bottom: 3mm;
+    }
+
+    /* Goals & KPIs Sub-section */
+    .goals-section {
+      margin-top: auto;
+      border-top: 1px dashed var(--border-light);
+      padding-top: 3.2mm;
+    }
+
+    .goals-heading {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16pt;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 0.8mm;
+    }
+
+    .goals-heading .red-text {
+      color: var(--amrita-red);
+    }
+
+    .goals-capsules {
+      display: flex;
+      flex-direction: column;
+      gap: 2.5mm;
+      margin-top: 2.5mm;
+    }
+
+    .goal-capsule {
+      background: linear-gradient(135deg, var(--amrita-red) 0%, var(--amrita-red-dark) 100%);
+      color: #FFFFFF;
+      padding: 3mm 4mm;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 3mm;
+      box-shadow: 0 4px 12px rgba(184, 36, 50, 0.2);
+    }
+
+    .goal-capsule-icon {
+      width: 6.8mm;
+      height: 6.8mm;
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .goal-capsule-icon svg {
+      width: 4mm;
+      height: 4mm;
+      fill: #FFFFFF;
+    }
+
+    .goal-capsule-text {
+      font-size: 8.5pt;
+      font-weight: 600;
+      line-height: 1.35;
+      letter-spacing: 0.005em;
+    }
+
+    /* ==========================================================================
+       CARD 3: ARCHITECTURE OVERVIEW (MIND MAP VISUAL)
+       ========================================================================== */
+    .card-architecture {
+      flex: 1;
+      padding: 6.5mm 7.5mm;
+      background: #FFFFFF;
+      position: relative;
+    }
+
+    .mindmap-wrapper {
+      position: relative;
+      flex: 1;
+      margin-top: 1mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 4 Nodes Grid: 2 columns, 2 rows with distinct spacing */
+    .mindmap-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 12mm 32mm;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      z-index: 5;
+    }
+
+    /* Center Badge (Compact two-line node centered cleanly) */
+    .mindmap-center-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 30;
+    }
+
+    .mindmap-center {
+      background: linear-gradient(135deg, var(--amrita-red) 0%, var(--amrita-red-dark) 100%);
+      color: #FFFFFF;
+      font-family: 'Outfit', sans-serif;
+      font-size: 9.5pt;
+      font-weight: 900;
+      line-height: 1.15;
+      padding: 3mm 4.5mm;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(184, 36, 50, 0.45);
+      border: 2px solid #FFFFFF;
+      text-align: center;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .node-box {
+      background: var(--charcoal-card);
+      border-radius: 14px;
+      padding: 3.2mm 4mm;
+      box-shadow: 0 5px 18px rgba(0, 0, 0, 0.12);
+      border: 1px solid var(--charcoal-border);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 10;
+    }
+
+    .node-header-pill {
+      background: var(--amrita-red);
+      color: #FFFFFF;
+      font-family: 'Outfit', sans-serif;
+      font-size: 7.5pt;
+      font-weight: 800;
+      padding: 1.2mm 3.2mm;
+      border-radius: 999px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      display: inline-block;
+      width: fit-content;
+      margin-bottom: 2mm;
+      box-shadow: 0 2px 6px rgba(184, 36, 50, 0.35);
+    }
+
+    .node-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 1.3mm;
+    }
+
+    .node-list-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 1.8mm;
+    }
+
+    .node-item-content {
+      font-size: 7.5pt;
+      color: #E2E6EA;
+      line-height: 1.28;
+      text-align: left;
+    }
+
+    .node-item-content code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 6.8pt;
+      background: rgba(255, 255, 255, 0.12);
+      padding: 0.2mm 1mm;
+      border-radius: 3px;
+      color: #79C0FF;
+    }
+
+    .node-bullet {
+      color: var(--amrita-red-light);
+      font-size: 9pt;
+      line-height: 0.9;
+      flex-shrink: 0;
+      margin-top: 0.2mm;
+    }
+
+    /* SVG Connecting Lines Canvas */
+    .mindmap-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* ==========================================================================
+       CARD 4: IMPACT & CONCLUSION (Dark Charcoal Theme)
+       ========================================================================== */
+    .card-impact {
+      flex: 0 0 186mm;
+      background: var(--charcoal-dark);
+      border: 1px solid var(--charcoal-border);
+      padding: 5.5mm 7mm;
+      color: #FFFFFF;
+      box-shadow: var(--shadow-md);
+      justify-content: space-between;
+    }
+
+    .card-impact .card-title {
+      color: #FFFFFF;
+    }
+
+    .card-impact .card-subtitle {
+      color: var(--text-light-muted);
+    }
+
+    .impact-body {
+      font-size: 8.8pt;
+      line-height: 1.48;
+      color: #D3D8DE;
+      text-align: left;
+    }
+
+    .impact-highlights {
+      display: flex;
+      gap: 3mm;
+      margin-top: 2.2mm;
+    }
+
+    .impact-badge {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 2.2mm 3mm;
+      display: flex;
+      align-items: center;
+      gap: 2.2mm;
+    }
+
+    .impact-badge-icon {
+      color: var(--amrita-red-light);
+      font-size: 11pt;
+      font-weight: 800;
+    }
+
+    .impact-badge-text {
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: #FFFFFF;
+      line-height: 1.25;
+    }
+
+    /* ==========================================================================
+       CARD 5: INSIGHTS & RESULTS
+       ========================================================================== */
+    .card-results {
+      flex: 1;
+      padding: 5.5mm 7.5mm;
+      justify-content: space-between;
+    }
+
+    .results-body {
+      font-size: 8.6pt;
+      line-height: 1.45;
+      color: #2F343B;
+      text-align: left;
+      margin-bottom: 2mm;
+    }
+
+    /* Metrics Grid Callout */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 3mm;
+      margin-top: 1.5mm;
+    }
+
+    .metric-card {
+      background: var(--bg-cream);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 2.5mm 2mm;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .metric-value {
+      font-family: 'Outfit', sans-serif;
+      font-size: 14pt;
+      font-weight: 800;
+      color: var(--amrita-red);
+      line-height: 1.1;
+      margin-bottom: 0.5mm;
+    }
+
+    .metric-label {
+      font-size: 6.8pt;
+      font-weight: 800;
+      color: #383D43;
+      line-height: 1.2;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .metric-sub {
+      font-size: 6pt;
+      color: var(--text-muted);
+      margin-top: 0.4mm;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="poster-container">
+
+    <!-- ====================================================================
+         ROW 1: MAIN HERO CARD | PROJECT OVERVIEW & GOALS | ARCHITECTURE
+         ==================================================================== -->
+    <div class="row-top">
+
+      <!-- CARD 1: MAIN HERO RED CARD -->
+      <div class="card card-hero">
+        
+        <!-- Institutional Badge -->
+        <div class="hero-inst-badge">
+          <img src="Amrita_Logo.png" alt="Amrita Logo">
+          <div class="hero-inst-text">Amrita School of Computing &bull; Chennai</div>
+        </div>
+
+        <!-- Project Title -->
+        <div class="hero-title-block">
+          <div class="hero-main-title">QUANTUMSAFE<br>VPN</div>
+          <div class="hero-sub-title">Post-Quantum Cryptography Secured Android Virtual Private Network</div>
+        </div>
+
+        <!-- How To Use -->
+        <div class="hero-steps-block">
+          <div class="hero-steps-heading">
+            <svg style="width:4.2mm; height:4.2mm; fill:white;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            Here's how to use it:
+          </div>
+          <div class="hero-step-item">
+            <div class="step-circle">1</div>
+            <div>Launch Android App &amp; Configure Gateway IP</div>
+          </div>
+          <div class="hero-step-item">
+            <div class="step-circle">2</div>
+            <div>Authenticate Server with ML-DSA-65</div>
+          </div>
+          <div class="hero-step-item">
+            <div class="step-circle">3</div>
+            <div>Ephemeral KEM Handshake (ML-KEM-1024)</div>
+          </div>
+          <div class="hero-step-item">
+            <div class="step-circle">4</div>
+            <div>One-Tap Encrypted Tunnel &amp; Live Telemetry</div>
+          </div>
+        </div>
+
+        <!-- Authors & QR Codes -->
+        <div class="hero-footer">
+          <div class="hero-authors">
+            <div class="authors-label">Project Investigators</div>
+            <div class="author-name">P. Abishek Singh <span class="author-roll">(U4CYS23001)</span></div>
+            <div class="author-name">R. S. Sanjaay Krishna <span class="author-roll">(U4CYS23043)</span></div>
+            <div class="author-guide">Supervisor: Dr. G. Saranya, Asst. Prof.</div>
+          </div>
+          <div class="hero-qrs">
+            <div class="qr-box">
+              <img src="qr_code_github.png" alt="GitHub QR">
+              <div class="qr-label">Code Base</div>
+            </div>
+            <div class="qr-box">
+              <img src="qr_code_demo.png" alt="Demo QR">
+              <div class="qr-label">Releases</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CARD 2: PROJECT OVERVIEW & GOALS -->
+      <div class="card card-overview">
+        <div>
+          <div class="card-header">
+            <div class="card-title"><span class="red-text">Project</span> Overview</div>
+            <div class="card-subtitle">A snapshot of the what, why, and how</div>
+          </div>
+          <p class="body-paragraph">
+            <strong>QuantumSafe VPN</strong> is an end-to-end post-quantum cryptographic VPN engineered to protect mobile IP communications against <em>Harvest Now, Decrypt Later (HNDL)</em> attacks and future cryptanalytically relevant quantum computers running Shor's algorithm.
+          </p>
+          <p class="body-paragraph">
+            By superseding vulnerable RSA and elliptic curve Diffie-Hellman primitives with finalized NIST standards (<strong>FIPS 203 ML-KEM-1024</strong> &amp; <strong>FIPS 204 ML-DSA-65</strong>), the system delivers authenticated, hardware-accelerated <strong>AES-256-GCM</strong> encrypted tunneling between an unprivileged Android client and a hardened Linux security gateway with automated dynamic IP pooling.
+          </p>
+        </div>
+
+        <!-- Goals & KPIs -->
+        <div class="goals-section">
+          <div class="goals-heading"><span class="red-text">Goals &amp;</span> KPIs</div>
+          <div class="card-subtitle">What are we aiming for?</div>
+          <div class="goals-capsules">
+            <div class="goal-capsule">
+              <div class="goal-capsule-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+              </div>
+              <div class="goal-capsule-text">
+                Immunizes mobile communications against quantum cryptanalysis using NIST FIPS 203 &amp; 204 standards.
+              </div>
+            </div>
+            <div class="goal-capsule">
+              <div class="goal-capsule-icon">
+                <svg viewBox="0 0 24 24"><path d="M13 2.05v3.03c3.39.49 6 3.39 6 6.92 0 .9-.18 1.75-.48 2.54l2.6 1.53c.56-1.24.88-2.62.88-4.07 0-5.18-3.95-9.45-9-9.95zM12 19c-3.87 0-7-3.13-7-7 0-3.53 2.61-6.43 6-6.92V2.05c-5.06.5-9 4.76-9 9.95 0 5.52 4.47 10 9.99 10 3.31 0 6.24-1.61 8.01-4.09l-2.45-1.44c-1.35 1.57-3.32 2.53-5.55 2.53z"/></svg>
+              </div>
+              <div class="goal-capsule-text">
+                Zero-leak full tunneling with sub-40ms PQC handshake &amp; real-time cryptographic telemetry.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CARD 3: ARCHITECTURE OVERVIEW (MIND MAP) -->
+      <div class="card card-architecture">
+        <div class="card-header">
+          <div class="card-title"><span class="red-text">Architecture</span> Overview</div>
+          <div class="card-subtitle">A visual mind map illustrating the architectural components</div>
+        </div>
+
+        <div class="mindmap-wrapper">
+          <!-- Center Badge Container -->
+          <div class="mindmap-center-container">
+            <div class="mindmap-center">
+              QUANTUMSAFE<br>VPN
+            </div>
+          </div>
+
+          <!-- SVG Connector Lines (Clean orthogonal branching) -->
+          <svg class="mindmap-svg" viewBox="0 0 1000 600" preserveAspectRatio="none">
+            <!-- Left Horizontal Branch from Center (500, 300) -->
+            <path d="M 450,300 L 400,300" stroke="#B82432" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <path d="M 400,300 L 400,165 L 380,165" stroke="#B82432" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <circle cx="380" cy="165" r="4.5" fill="#B82432"/>
+            
+            <path d="M 400,300 L 400,435 L 380,435" stroke="#B82432" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <circle cx="380" cy="435" r="4.5" fill="#B82432"/>
+
+            <!-- Right Horizontal Branch from Center (500, 300) -->
+            <path d="M 550,300 L 600,300" stroke="#B82432" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <path d="M 600,300 L 600,165 L 620,165" stroke="#B82432" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <circle cx="620" cy="165" r="4.5" fill="#B82432"/>
+
+            <path d="M 600,300 L 600,435 L 620,435" stroke="#B82432" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <circle cx="620" cy="435" r="4.5" fill="#B82432"/>
+          </svg>
+
+          <!-- 4 Category Nodes Grid -->
+          <div class="mindmap-grid">
+            
+            <!-- Node 1: Security & PQC (Top-Left) -->
+            <div class="node-box">
+              <div class="node-header-pill">Security &amp; PQC</div>
+              <ul class="node-list">
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">ML-KEM-1024 (FIPS 203) Key Encapsulation</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">ML-DSA-65 (FIPS 204) Gateway Signature</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Hardware AES-256-GCM AEAD Tunneling</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">HKDF-SHA256 (RFC 5869) Key Derivation</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">64-bit Sliding-Window Anti-Replay Defense</div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Node 2: Tech Stack (Top-Right) -->
+            <div class="node-box">
+              <div class="node-header-pill">Tech Stack</div>
+              <ul class="node-list">
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content"><strong>Client:</strong> Kotlin, Android SDK 34, Coroutines</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content"><strong>Server:</strong> Python 3.11, Linux TUN, iptables</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content"><strong>Crypto:</strong> pure-pqc, BouncyCastle, cryptography</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content"><strong>Testing:</strong> Wireshark, Scapy, pytest, LMK tests</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content"><strong>OS:</strong> Kali Linux 2024.2 &amp; Android 14</div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Node 3: Android Client (Bottom-Left) -->
+            <div class="node-box">
+              <div class="node-header-pill">Android Client</div>
+              <ul class="node-list">
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Native <code>VpnService</code> Datagram Interception</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Pure-Kotlin Keccak &amp; Lattice Cryptography</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Kernel Socket <code>protect()</code> Loop Isolation</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Jetpack MVVM &amp; Material Design 3 UI</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Live Cryptographic Telemetry Dashboard</div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Node 4: Linux Gateway (Bottom-Right) -->
+            <div class="node-box">
+              <div class="node-header-pill">Linux Gateway</div>
+              <ul class="node-list">
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Linux Kernel Virtual TUN Interface (<code>tun0</code>)</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Dynamic IPv4 Lease Subnet (<code>10.8.0.0/24</code>)</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Kernel <code>iptables</code> NAT Masquerading</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">Length-Prefixed TCP Stream on Port 7000</div>
+                </li>
+                <li class="node-list-item">
+                  <span class="node-bullet">&#9679;</span>
+                  <div class="node-item-content">High-Throughput Non-Blocking Packet I/O</div>
+                </li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ====================================================================
+         ROW 2: IMPACT & CONCLUSION | INSIGHTS & RESULTS
+         ==================================================================== -->
+    <div class="row-bottom">
+
+      <!-- CARD 4: IMPACT & CONCLUSION -->
+      <div class="card card-impact">
+        <div>
+          <div class="card-header">
+            <div class="card-title"><span class="red-text">Impact &amp;</span> Conclusion</div>
+            <div class="card-subtitle">highlights the value and quantum-resilient defense outcome</div>
+          </div>
+          <p class="impact-body">
+            <strong>QuantumSafe VPN</strong> establishes a breakthrough mobile implementation of post-quantum cryptography, proving that lattice-based security standards (<strong>FIPS 203 &amp; 204</strong>) can be deployed on resource-constrained Android smartphones without compromising throughput, battery endurance, or user experience.
+          </p>
+          <p class="impact-body" style="margin-top:2mm;">
+            By resolving critical platform challenges—such as socket routing loops, Low Memory Killer (LMK) eviction, and Keccak CPU bottlenecks—this project delivers a practical blueprint for mobile zero-trust enterprise security, safeguarding vital data against state-sponsored quantum decryption.
+          </p>
+        </div>
+
+        <div class="impact-highlights">
+          <div class="impact-badge">
+            <span class="impact-badge-icon">&#10004;</span>
+            <div class="impact-badge-text">Future-Proof Quantum Immunity</div>
+          </div>
+          <div class="impact-badge">
+            <span class="impact-badge-icon">&#10004;</span>
+            <div class="impact-badge-text">Zero Architectural Leaks</div>
+          </div>
+          <div class="impact-badge">
+            <span class="impact-badge-icon">&#10004;</span>
+            <div class="impact-badge-text">Battery-Optimized Multithreading</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 5: INSIGHTS & RESULTS -->
+      <div class="card card-results">
+        <div>
+          <div class="card-header">
+            <div class="card-title"><span class="red-text">Insights &amp;</span> Results</div>
+            <div class="card-subtitle">what the platform verifies, defends, and delivers</div>
+          </div>
+          <p class="results-body">
+            Testing on a physical <strong>Google Pixel (Android 14)</strong> connected to a <strong>Kali Linux</strong> gateway verified end-to-end mathematical correctness across all NIST Known-Answer Test (KAT) vectors with a 100% automated test suite pass rate.
+          </p>
+          <p class="results-body">
+            Adversary simulation confirmed absolute cryptographic integrity: <strong>100% of ciphertext bit-flipping attacks</strong> were instantly dropped by Galois MAC tags, packet replays were thwarted by sliding-window sequence tracking, and rogue server substitutions were blocked via ML-DSA fingerprint pinning.
+          </p>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-value">100%</div>
+            <div class="metric-label">KAT Compliance</div>
+            <div class="metric-sub">FIPS 203 &amp; 204</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">100%</div>
+            <div class="metric-label">Tamper Defense</div>
+            <div class="metric-sub">Bit-Flip Rejection</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">0%</div>
+            <div class="metric-label">DNS / IP Leaks</div>
+            <div class="metric-sub">Full Tunneling</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">~38 ms</div>
+            <div class="metric-label">PQC Handshake</div>
+            <div class="metric-sub">Sub-40ms Ephemeral</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</body>
+</html>

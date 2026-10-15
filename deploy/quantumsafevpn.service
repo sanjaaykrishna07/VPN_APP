@@ -1,0 +1,19 @@
+[Unit]
+Description=QuantumSafeVPN Post-Quantum Secure VPN Server
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/QuantumSafeVPN
+Environment=PYTHONPATH=/opt/QuantumSafeVPN
+Environment=VPN_SERVER_PORT=7000
+ExecStart=/opt/QuantumSafeVPN/venv/bin/python vpn/tunnel_server.py
+Restart=always
+RestartSec=3
+KillMode=process
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

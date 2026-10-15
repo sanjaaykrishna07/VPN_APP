@@ -1,0 +1,624 @@
+import socket
+import struct
+import sys
+import os
+import subprocess
+import threading
+
+
+# --------------------------------------------------
+# Project path
+# --------------------------------------------------
+
+sys.path.append(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
+)
+
+
+# --------------------------------------------------
+# Project imports
+# --------------------------------------------------
+
+from vpn.tun import TunInterface
+
+from pqc.mlkem import (
+    generate_keypair,
+    decapsulate
+)
+
+from pqc.mldsa import verify
+
+from crypto.classical import (
+    derive_session_key,
+    encrypt,
+    decrypt
+)
+
+
+# --------------------------------------------------
+# VPN configuration
+# --------------------------------------------------
+
+SERVER_IP = "192.168.100.1"
+SERVER_PORT = 6000
+
+TUN_NAME = "tun0"
+TUN_IP = "10.8.0.2/24"
+
+
+# --------------------------------------------------
+# Receive exactly N bytes
+# --------------------------------------------------
+
+def recv_exact(sock, size):
+
+    data = b""
+
+    while len(data) < size:
+
+        chunk = sock.recv(
+            size - len(data)
+        )
+
+        if not chunk:
+            raise ConnectionError(
+                "Connection closed"
+            )
+
+        data += chunk
+
+    return data
+
+
+# --------------------------------------------------
+# Send length-prefixed frame
+# --------------------------------------------------
+
+def send_frame(sock, data):
+
+    header = struct.pack(
+        "!I",
+        len(data)
+    )
+
+    sock.sendall(header)
+    sock.sendall(data)
+
+
+# --------------------------------------------------
+# Receive length-prefixed frame
+# --------------------------------------------------
+
+def recv_frame(sock):
+
+    header = recv_exact(
+        sock,
+        4
+    )
+
+    length = struct.unpack(
+        "!I",
+        header
+    )[0]
+
+    if length <= 0 or length > 65535:
+
+        raise ValueError(
+            f"Invalid packet length: {length}"
+        )
+
+    return recv_exact(
+        sock,
+        length
+    )
+
+
+# --------------------------------------------------
+# Configure TUN interface
+# --------------------------------------------------
+
+def configure_tun(tun_name):
+
+    print(
+        f"[*] Configuring {tun_name} "
+        f"with {TUN_IP}"
+    )
+
+    subprocess.run(
+        [
+            "ip",
+            "addr",
+            "add",
+            TUN_IP,
+            "dev",
+            tun_name
+        ],
+        check=False
+    )
+
+    subprocess.run(
+        [
+            "ip",
+            "link",
+            "set",
+            tun_name,
+            "up"
+        ],
+        check=True
+    )
+
+    print(
+        f"[+] {tun_name} configured: "
+        f"{TUN_IP}"
+    )
+
+
+# --------------------------------------------------
+# TUN -> VPN
+# Encrypt packet and send to server
+# --------------------------------------------------
+
+def tun_to_network(
+    tun,
+    sock,
+    session_key
+):
+
+    try:
+
+        while True:
+
+            packet = tun.read_packet()
+
+            if not packet:
+                continue
+
+            encrypted_packet = encrypt(
+                session_key,
+                packet
+            )
+
+            send_frame(
+                sock,
+                encrypted_packet
+            )
+
+            print(
+                f"[TUN → VPN] "
+                f"{len(packet)} bytes "
+                f"→ encrypted "
+                f"{len(encrypted_packet)} bytes"
+            )
+
+    except Exception as e:
+
+        print(
+            f"[!] TUN → network stopped: {e}"
+        )
+
+
+# --------------------------------------------------
+# VPN -> TUN
+# Receive encrypted packet, decrypt it
+# --------------------------------------------------
+
+def network_to_tun(
+    tun,
+    sock,
+    session_key
+):
+
+    try:
+
+        while True:
+
+            encrypted_packet = recv_frame(
+                sock
+            )
+
+            packet = decrypt(
+                session_key,
+                encrypted_packet
+            )
+
+            tun.write_packet(
+                packet
+            )
+
+            print(
+                f"[VPN → TUN] "
+                f"encrypted "
+                f"{len(encrypted_packet)} bytes "
+                f"→ decrypted "
+                f"{len(packet)} bytes"
+            )
+
+    except Exception as e:
+
+        print(
+            f"[!] Network → TUN stopped: {e}"
+        )
+
+
+# ==================================================
+# PQC HANDSHAKE
+# ML-DSA authentication + ML-KEM key exchange
+# ==================================================
+
+def perform_handshake(sock):
+
+    # --------------------------------------------------
+    # STEP 1
+    # Receive server ML-DSA public key
+    # --------------------------------------------------
+
+    print(
+        "[*] Waiting for ML-DSA-65 public key..."
+    )
+
+    dsa_public_key = recv_frame(
+        sock
+    )
+
+    print(
+        f"[+] ML-DSA public key received: "
+        f"{len(dsa_public_key)} bytes"
+    )
+
+    # Expected ML-DSA-65 public key:
+    # 1952 bytes
+
+    if len(dsa_public_key) != 1952:
+
+        raise ValueError(
+            "Invalid ML-DSA-65 public key size"
+        )
+
+    # --------------------------------------------------
+    # STEP 2
+    # Generate ML-KEM-1024 key pair
+    # --------------------------------------------------
+
+    print(
+        "[*] Generating ML-KEM-1024 key pair..."
+    )
+
+    public_key, secret_key = generate_keypair()
+
+    print(
+        f"[+] ML-KEM public key: "
+        f"{len(public_key)} bytes"
+    )
+
+    # Expected ML-KEM-1024 public key:
+    # 1568 bytes
+
+    if len(public_key) != 1568:
+
+        raise ValueError(
+            "Invalid ML-KEM-1024 public key size"
+        )
+
+    # --------------------------------------------------
+    # STEP 3
+    # Send ML-KEM public key to server
+    # --------------------------------------------------
+
+    send_frame(
+        sock,
+        public_key
+    )
+
+    print(
+        "[+] ML-KEM public key sent"
+    )
+
+    # --------------------------------------------------
+    # STEP 4
+    # Receive ML-KEM ciphertext
+    # --------------------------------------------------
+
+    ciphertext = recv_frame(
+        sock
+    )
+
+    print(
+        f"[+] ML-KEM ciphertext received: "
+        f"{len(ciphertext)} bytes"
+    )
+
+    # Expected ML-KEM-1024 ciphertext:
+    # 1568 bytes
+
+    if len(ciphertext) != 1568:
+
+        raise ValueError(
+            "Invalid ML-KEM-1024 ciphertext size"
+        )
+
+    # --------------------------------------------------
+    # STEP 5
+    # Receive ML-DSA signature
+    # --------------------------------------------------
+
+    signature = recv_frame(
+        sock
+    )
+
+    print(
+        f"[+] ML-DSA signature received: "
+        f"{len(signature)} bytes"
+    )
+
+    # Expected ML-DSA-65 signature:
+    # 3309 bytes
+
+    if len(signature) != 3309:
+
+        raise ValueError(
+            "Invalid ML-DSA-65 signature size"
+        )
+
+    # --------------------------------------------------
+    # STEP 6
+    # Reconstruct handshake transcript
+    # --------------------------------------------------
+
+    protocol_version = b"QuantumSafeVPN-v1"
+
+    transcript = (
+        protocol_version
+        + public_key
+        + ciphertext
+    )
+
+    print(
+        "[*] Verifying ML-DSA-65 signature..."
+    )
+
+    # --------------------------------------------------
+    # STEP 7
+    # Verify server signature
+    # --------------------------------------------------
+
+    authenticated = verify(
+        dsa_public_key,
+        transcript,
+        signature
+    )
+
+    if not authenticated:
+
+        raise ConnectionError(
+            "ML-DSA authentication failed"
+        )
+
+    print(
+        "[+] ML-DSA-65 signature verified"
+    )
+
+    # --------------------------------------------------
+    # STEP 8
+    # ML-KEM decapsulation
+    # --------------------------------------------------
+
+    shared_secret = decapsulate(
+        secret_key,
+        ciphertext
+    )
+
+    print(
+        "[+] ML-KEM decapsulation successful"
+    )
+
+    print(
+        f"[+] Shared secret size: "
+        f"{len(shared_secret)} bytes"
+    )
+
+    # --------------------------------------------------
+    # STEP 9
+    # Derive AES-256 session key
+    # --------------------------------------------------
+
+    session_key = derive_session_key(
+        shared_secret
+    )
+
+    print(
+        "[+] AES-256-GCM session key established"
+    )
+
+    return session_key
+
+
+# ==================================================
+# MAIN
+# ==================================================
+
+def main():
+
+    tun = None
+    sock = None
+
+    try:
+
+        # --------------------------------------------------
+        # Create TUN interface
+        # --------------------------------------------------
+
+        tun = TunInterface(
+            TUN_NAME
+        )
+
+        tun.create()
+
+        print(
+            f"[+] TUN interface: "
+            f"{tun.name}"
+        )
+
+        # --------------------------------------------------
+        # Configure TUN
+        # --------------------------------------------------
+
+        configure_tun(
+            tun.name
+        )
+
+        # --------------------------------------------------
+        # Create TCP socket
+        # --------------------------------------------------
+
+        sock = socket.socket(
+            socket.AF_INET,
+            socket.SOCK_STREAM
+        )
+
+        # --------------------------------------------------
+        # Connect to VPN server
+        # --------------------------------------------------
+
+        print(
+            f"[*] Connecting to "
+            f"{SERVER_IP}:{SERVER_PORT}"
+        )
+
+        sock.connect(
+            (
+                SERVER_IP,
+                SERVER_PORT
+            )
+        )
+
+        print(
+            "[+] VPN transport connected"
+        )
+
+        # --------------------------------------------------
+        # PQC handshake
+        # --------------------------------------------------
+
+        session_key = perform_handshake(
+            sock
+        )
+
+        # --------------------------------------------------
+        # VPN ready
+        # --------------------------------------------------
+
+        print()
+        print(
+            "=============================================="
+        )
+        print(
+            "       QUANTUM-SAFE VPN TUNNEL READY"
+        )
+        print(
+            "=============================================="
+        )
+        print(
+            "Key Exchange  : ML-KEM-1024"
+        )
+        print(
+            "Authentication : ML-DSA-65"
+        )
+        print(
+            "KDF            : HKDF-SHA256"
+        )
+        print(
+            "Encryption     : AES-256-GCM"
+        )
+        print(
+            "=============================================="
+        )
+        print()
+
+        # --------------------------------------------------
+        # Start encrypted packet forwarding
+        # --------------------------------------------------
+
+        thread_send = threading.Thread(
+            target=tun_to_network,
+            args=(
+                tun,
+                sock,
+                session_key
+            ),
+            daemon=True
+        )
+
+        thread_receive = threading.Thread(
+            target=network_to_tun,
+            args=(
+                tun,
+                sock,
+                session_key
+            ),
+            daemon=True
+        )
+
+        thread_send.start()
+        thread_receive.start()
+
+        # Keep main thread alive
+
+        while True:
+
+            thread_send.join(
+                timeout=1
+            )
+
+            thread_receive.join(
+                timeout=1
+            )
+
+            if not thread_send.is_alive():
+                break
+
+            if not thread_receive.is_alive():
+                break
+
+    except KeyboardInterrupt:
+
+        print(
+            "\n[*] Stopping VPN client"
+        )
+
+    except Exception as e:
+
+        print(
+            f"[!] VPN client error: {e}"
+        )
+
+    finally:
+
+        if sock is not None:
+
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+        if tun is not None:
+
+            try:
+                tun.close()
+            except Exception:
+                pass
+
+        print(
+            "[+] VPN client stopped"
+        )
+
+
+# --------------------------------------------------
+# Entry point
+# --------------------------------------------------
+
+if __name__ == "__main__":
+    main()

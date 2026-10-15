@@ -1,0 +1,47 @@
+# Gradle & Android build caches and outputs
+.gradle_home/
+.gradle/
+*/.gradle/
+**/build/
+build/
+*.iml
+.idea/
+local.properties
+.cxx/
+captures/
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.pytest_cache/
+
+# LaTeX auxiliary files (source .tex, .cls, and target .pdf files remain tracked)
+*.aux
+*.lof
+*.log
+*.lot
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+
+# GitHub hard limit is 100 MB per file.
+# QuantumSafeVPN_Kali.zip is ~116.5 MB. Recreate using create_kali_zip.py if needed.
+QuantumSafeVPN_Kali.zip

@@ -1,0 +1,99 @@
+% ============================================================
+%  QUANTUMSAFE VPN: FULL TECHNICAL PROJECT REPORT
+%  Bachelor of Technology in Computer Science and Engineering
+%  (Cyber Security)
+%  Amrita School of Computing, Amrita Vishwa Vidyapeetham, Chennai
+% ============================================================
+
+\documentclass[12pt,a4paper]{amritareport}
+
+\input{preamble}
+
+% Metadata Definitions
+\reporttitle{QUANTUMSAFE VPN: POST-QUANTUM CRYPTOGRAPHY SECURED ANDROID VIRTUAL PRIVATE NETWORK}
+\degreename{BACHELOR OF TECHNOLOGY IN COMPUTER SCIENCE AND ENGINEERING (CYBER SECURITY)}
+\reportdate{October 2026}
+\deptaddress{Department of Computer Science\\ and Engineering,\\ Amrita School of Computing,\\ Amrita Vishwa Vidyapeetham,\\ Chennai -- 601103.}
+
+% Candidates
+\addcandidate{P. ABISHEK SINGH}{CH.SC.U4CYS23001}
+\addcandidate{R. S. SANJAAY KRISHNA}{CH.SC.U4CYS23043}
+
+% Academic Guidance
+\supervisor{Dr. G. SARANYA}{Assistant Professor (Sr. Gr.)}
+\hod{Dr. S. BAGHAVATHI PRIYA}{Associate Professor \& Chairperson}
+
+% Institutional Logos
+\universitylogo{Amrita_Logo.png}
+\universityfulllogo{Amrita_Full_Logo.png}
+
+\begin{document}
+
+% ------------------------------------------------------------
+%  PRELIMINARY PAGES (Roman Numerals)
+% ------------------------------------------------------------
+\makecoverpage
+\pagenumbering{roman}
+\maketitlepage
+\makebonafidecertificate
+\makedeclaration
+
+% Abstract
+\input{frontmatter/abstract}
+
+% Acknowledgements
+\acknowledgement{
+This project would not have been possible without the contribution of many people. It gives us immense pleasure to express our profound gratitude to our honorable Chancellor, \textbf{Sri Mata Amritanandamayi Devi}, for her blessings and for being a source of inspiration. We extend our sincere thanks to Administrative Director, \textbf{Sampoojya Swami Vinyamritananda Puri}, of Amrita Vishwa Vidyapeetham, Chennai, for his guidance and support. We are deeply indebted to our Director, \textbf{I B Manikantan}, of Amrita School of Computing and Engineering, for providing all the facilities and extended support that enabled us to gain valuable education and learning experience.
+
+We extend our special thanks to \textbf{Dr. V Jayakumar}, Principal of Amrita School of Computing, for the support provided in the successful completion of this project. We are also grateful to \textbf{Dr. S Baghavathi Priya}, Chairperson, Department of Computer Science and Engineering, and \textbf{Dr. S Udhaya Kumar}, Program Chair, Department of Computer Science and Engineering -- Cyber Security and project supervisor, \textbf{Dr. S Saravanan}, Assistant Professor (Sr. Gr.), for their valuable guidance and encouragement throughout this project.
+
+We would like to extend our heartfelt thanks to all faculty members and staff of the Amrita School of Computing for their continuous support. Finally, we extend our gratitude to our families and friends for their encouragement and moral support throughout this project.
+}
+
+% Table of Contents, List of Figures, List of Tables
+\setcounter{tocdepth}{2}
+\frontmattertoc
+
+% List of Symbols and Abbreviations
+\input{frontmatter/abbreviations}
+
+% ------------------------------------------------------------
+%  MAIN BODY CHAPTERS (Arabic Numerals - Exactly 6 Chapters)
+% ------------------------------------------------------------
+\startmainmatter
+
+\clearpage
+\input{chapters/chapter01_introduction}
+\clearpage
+\input{chapters/chapter02_literature_review}
+\clearpage
+\input{chapters/chapter03_system_design}
+\clearpage
+\input{chapters/chapter04_implementation}
+\clearpage
+\input{chapters/chapter05_testing_results}
+\clearpage
+\input{chapters/chapter06_conclusion}
+
+% ------------------------------------------------------------
+%  REFERENCES
+% ------------------------------------------------------------
+\clearpage
+\bibliographystyle{ieeetran}
+\bibliography{references}
+
+% ------------------------------------------------------------
+%  APPENDICES
+% ------------------------------------------------------------
+\clearpage
+\appendix
+\addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+
+\input{appendices/appendixD_wire_protocol}
+\clearpage
+\input{appendices/appendixE_source_excerpts}
+\clearpage
+\input{appendices/appendixC_deployment_guide}
+
+\end{document}
+

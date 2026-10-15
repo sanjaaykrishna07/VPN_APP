@@ -1,0 +1,303 @@
+"""
+QuantumSafeVPN — Multi-Client Post-Quantum VPN Server
+======================================================
+Post-quantum wire protocol (ML-KEM-1024 + ML-DSA-65 + AES-256-GCM)
+with multi-client IP allocation, NAT routing, and TUN packet forwarding.
+"""
+import socket
+import struct
+import sys
+import os
+import threading
+import time
+import json
+
+sys.path.append(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
+)
+
+from vpn.tun import TunInterface
+from vpn.ip_pool import IPPool, SessionRouter
+from vpn.nat_manager import NATManager
+from vpn.config import load_config
+from pqc.mlkem import encapsulate
+from pqc.mldsa import sign, load_or_create_server_identity
+from crypto.classical import derive_session_key, encrypt, decrypt
+
+# Load configuration
+CONFIG = load_config()
+HOST = CONFIG["server"].get("host", "0.0.0.0")
+PORT = int(os.environ.get("VPN_SERVER_PORT", CONFIG["server"].get("port", 7000)))
+SERVER_VPN_IP = CONFIG["server"].get("server_ip", "10.8.0.1")
+TUN_NETWORK = CONFIG["server"].get("tun_network", "10.8.0.0/24")
+DNS_SERVERS = CONFIG["server"].get("dns_servers", ["1.1.1.1", "8.8.8.8"])
+MTU = int(CONFIG["server"].get("mtu", 1400))
+ENABLE_NAT = CONFIG["server"].get("enable_nat", True)
+
+# Global pool, router, and NAT manager
+ip_pool = IPPool(
+    start_ip=CONFIG["server"].get("client_ip_start", "10.8.0.2"),
+    end_ip=CONFIG["server"].get("client_ip_end", "10.8.0.254")
+)
+session_router = SessionRouter()
+nat_manager = NATManager(vpn_subnet=TUN_NETWORK, tun_interface="tun0")
+
+# Pre-load server identity once at module initialization
+print("[*] Initializing ML-DSA-65 server identity...")
+SERVER_DSA_PUBLIC_KEY, SERVER_DSA_SECRET_KEY = load_or_create_server_identity()
+print(f"[+] Server ML-DSA-65 identity ready ({len(SERVER_DSA_PUBLIC_KEY)} bytes)")
+
+
+def recv_exact(sock, size):
+    data = b""
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            raise ConnectionError("Connection closed by peer")
+        data += chunk
+    return data
+
+
+def send_frame(sock, data):
+    header = struct.pack("!I", len(data))
+    sock.sendall(header)
+    sock.sendall(data)
+
+
+def recv_frame(sock):
+    header = recv_exact(sock, 4)
+    length = struct.unpack("!I", header)[0]
+    if length <= 0 or length > 65535:
+        raise ValueError(f"Invalid packet length: {length}")
+    return recv_exact(sock, length)
+
+
+def perform_handshake(sock, client_addr):
+    """
+    Perform 4-stage post-quantum handshake:
+    1. Send ML-DSA-65 public key
+    2. Recv ML-KEM-1024 public key
+    3. Encapsulate & Sign -> Send ciphertext, signature, and assigned client configuration
+    4. Derive session key
+    """
+    print(f"[*] [Handshake 1/4] Sending ML-DSA-65 server public key ({len(SERVER_DSA_PUBLIC_KEY)} bytes)...")
+    send_frame(sock, SERVER_DSA_PUBLIC_KEY)
+
+    print(f"[*] [Handshake 2/4] Awaiting ML-KEM-1024 public key from {client_addr}...")
+    public_key = recv_frame(sock)
+    print(f"[+] ML-KEM public key received: {len(public_key)} bytes")
+
+    ciphertext, shared_secret = encapsulate(public_key)
+    print("[+] ML-KEM-1024 encapsulation successful")
+
+    protocol_version = b"QuantumSafeVPN-v1"
+    transcript = protocol_version + public_key + ciphertext
+    signature = sign(SERVER_DSA_SECRET_KEY, transcript)
+    print(f"[+] ML-DSA-65 signature generated: {len(signature)} bytes")
+
+    send_frame(sock, ciphertext)
+    send_frame(sock, signature)
+
+    # Allocate Client IP
+    assigned_ip = ip_pool.allocate(client_addr)
+    if not assigned_ip:
+        raise RuntimeError("No available IP addresses in VPN pool")
+
+    # Send client configuration (JSON payload)
+    config_payload = {
+        "assigned_ip": assigned_ip,
+        "netmask": "255.255.255.0",
+        "server_ip": SERVER_VPN_IP,
+        "dns": DNS_SERVERS,
+        "mtu": MTU
+    }
+    config_bytes = json.dumps(config_payload).encode("utf-8")
+    send_frame(sock, config_bytes)
+    print(f"[+] Assigned client IP: {assigned_ip} (DNS: {DNS_SERVERS})")
+
+    session_key = derive_session_key(shared_secret)
+    print("[+] AES-256-GCM session key established")
+    return session_key, assigned_ip
+
+
+def tun_dispatcher_loop(tun):
+    """
+    Dedicated background thread:
+    Reads packets from TUN device, parses destination IP,
+    and dispatches encrypted frames to the matching connected client.
+    """
+    print("[*] TUN Dispatcher thread active.")
+    while True:
+        try:
+            packet = tun.read_packet()
+            if not packet:
+                time.sleep(0.01)
+                continue
+
+            dest_ip = SessionRouter.extract_dest_ip(packet)
+            if not dest_ip:
+                continue
+
+            # Route to specific client
+            client_info = session_router.get_client(dest_ip)
+            if client_info:
+                sock = client_info["socket"]
+                key = client_info["session_key"]
+                client_info["send_seq"] += 1
+                seq = client_info["send_seq"]
+
+                # Frame with 64-bit sequence counter for anti-replay
+                seq_packet = struct.pack("!Q", seq) + packet
+                encrypted = encrypt(key, seq_packet)
+                try:
+                    send_frame(sock, encrypted)
+                    if seq % 25 == 1:
+                        print(f"[TUNNEL] WAN -> Client ({dest_ip}): {seq} packets returned")
+                        sys.stdout.flush()
+                except Exception:
+                    pass
+            elif dest_ip == "10.8.0.1" or dest_ip.endswith(".255") or dest_ip == "255.255.255.255" or getattr(tun, "is_virtual", False):
+                # Forward to all active clients
+                all_clients = session_router.get_all_clients()
+                for c_ip, c_info in all_clients.items():
+                    c_info["send_seq"] += 1
+                    seq_packet = struct.pack("!Q", c_info["send_seq"]) + packet
+                    encrypted = encrypt(c_info["session_key"], seq_packet)
+                    try:
+                        send_frame(c_info["socket"], encrypted)
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            time.sleep(0.05)
+
+
+def handle_client_connection(tun, conn, addr):
+    assigned_ip = None
+    try:
+        print(f"[+] Starting PQC handshake with {addr}...")
+        session_key, assigned_ip = perform_handshake(conn, addr)
+
+        print()
+        print("=" * 60)
+        print(f"   QUANTUM-SAFE VPN TUNNEL READY ({addr[0]}:{addr[1]})")
+        print("=" * 60)
+        print(f"Assigned IP  : {assigned_ip}")
+        print("Key Exchange : ML-KEM-1024")
+        print("KDF          : HKDF-SHA256")
+        print("Encryption   : AES-256-GCM")
+        print("=" * 60)
+        print()
+
+        # Register client in SessionRouter
+        session_router.register_client(assigned_ip, conn, session_key)
+
+        last_seq = 0
+        client_packet_count = 0
+        while True:
+            try:
+                encrypted_packet = recv_frame(conn)
+            except (ConnectionResetError, ConnectionError, BrokenPipeError):
+                break
+            except Exception:
+                time.sleep(0.05)
+                continue
+
+            try:
+                decrypted = decrypt(session_key, encrypted_packet)
+            except Exception as e:
+                print(f"[!] Decrypt error from {assigned_ip}: {e}")
+                sys.stdout.flush()
+                continue
+            
+            # Check for sequence number header
+            if len(decrypted) >= 8:
+                seq = struct.unpack("!Q", decrypted[:8])[0]
+                raw_ip = decrypted[8:]
+                if seq <= last_seq:
+                    print(f"[!] Warning: Potential replay packet detected from {assigned_ip} (seq {seq} <= {last_seq})")
+                last_seq = seq
+            else:
+                raw_ip = decrypted
+
+            # Forward client raw IP packet into Linux kernel TUN device
+            tun.write_packet(raw_ip)
+            client_packet_count += 1
+            if client_packet_count % 25 == 1:
+                dest = SessionRouter.extract_dest_ip(raw_ip)
+                print(f"[TUNNEL] Client -> WAN: {client_packet_count} packets routed (latest dest: {dest})")
+                sys.stdout.flush()
+
+    except (ConnectionResetError, ConnectionError, BrokenPipeError) as e:
+        print(f"[*] Client {addr} ({assigned_ip}) disconnected: {e}")
+    except Exception as e:
+        print(f"[!] Session error with {addr} ({assigned_ip}): {e}")
+    finally:
+        if assigned_ip:
+            session_router.unregister_client(assigned_ip)
+            ip_pool.release(assigned_ip)
+            print(f"[+] Released IP lease: {assigned_ip}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        print(f"[+] VPN tunnel closed for {addr}")
+
+
+def main():
+    # 1. Setup Linux TUN Interface
+    tun = TunInterface("tun0")
+    tun.create()
+    tun.configure(f"{SERVER_VPN_IP}/24")
+    print(f"[+] TUN interface: {tun.name} ({SERVER_VPN_IP}/24)")
+
+    # 2. Setup Linux IP Forwarding & NAT
+    if ENABLE_NAT:
+        nat_manager.setup_nat()
+
+    # 3. Start TUN Packet Dispatcher Thread
+    dispatcher = threading.Thread(target=tun_dispatcher_loop, args=(tun,), daemon=True)
+    dispatcher.start()
+
+    # 4. Bind & Listen TCP Server
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((HOST, PORT))
+    server.listen(20)
+
+    print(f"[*] QuantumSafeVPN Server listening on {HOST}:{PORT}")
+    print(f"[*] Ready to accept connections from Android, Windows, and Linux devices")
+
+    try:
+        while True:
+            try:
+                conn, addr = server.accept()
+                print(f"[+] Incoming connection from {addr}")
+                client_thread = threading.Thread(
+                    target=handle_client_connection,
+                    args=(tun, conn, addr),
+                    daemon=True
+                )
+                client_thread.start()
+            except Exception as e:
+                print(f"[!] Server accept error: {e}")
+                time.sleep(0.5)
+
+    except KeyboardInterrupt:
+        print("\n[*] Stopping VPN server...")
+    finally:
+        try:
+            server.close()
+            tun.close()
+            nat_manager.teardown_nat()
+        except Exception:
+            pass
+        print("[+] VPN server stopped cleanly")
+
+
+if __name__ == "__main__":
+    main()

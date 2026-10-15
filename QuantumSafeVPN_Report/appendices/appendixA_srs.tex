@@ -1,0 +1,102 @@
+% ============================================================
+%  APPENDIX A: DETAILED SOFTWARE REQUIREMENTS SPECIFICATION
+% ============================================================
+
+\chapter{DETAILED SOFTWARE REQUIREMENTS SPECIFICATION (SRS)}
+\label{app:srs}
+
+This appendix provides the formal Software Requirements Specification (SRS) for the QuantumSafe VPN system, conforming to the structural guidelines of IEEE Standard 830-1998 (Recommended Practice for Software Requirements Specifications).
+
+\section{Introduction and Purpose}
+The purpose of this specification is to define the functional, performance, security, and interface requirements for the QuantumSafe VPN mobile client and gateway. The intended audience includes software engineers, cybersecurity auditors, network administrators, and academic reviewers.
+
+\section{Overall Description}
+
+\subsection{Product Perspective}
+QuantumSafe VPN is a self-contained, post-quantum virtual private network suite consisting of a native Android client application and a multi-client Linux gateway daemon. It operates as an independent network tunnel, intercepting all Layer~3 IPv4 packets emitted by applications running on the mobile device and securely transporting them across an untrusted network.
+
+\subsection{User Characteristics}
+The system serves two distinct user classes:
+\begin{enumerate}
+    \item \textbf{General Mobile Users}: Security-conscious individuals requiring robust, zero-configuration network privacy on public networks. They interact exclusively with the Home dashboard via a single-tap Connect/Disconnect toggle.
+    \item \textbf{Network Administrators}: Technical personnel responsible for configuring enterprise gateway parameters, custom MTU sizing, and auditing server identity certificates.
+\end{enumerate}
+
+\section{Specific Requirements}
+
+\subsection{External Interface Requirements}
+
+\subsubsection{User Interfaces}
+\begin{itemize}
+    \item \textbf{UI-1}: The interface shall adhere to a minimal white color palette (\texttt{\#FFFFFF} surface, \texttt{\#1A1D20} typography, \texttt{\#1971C2} primary accent).
+    \item \textbf{UI-2}: The Home view shall render a prominent connection status badge (\texttt{DISCONNECTED}, \texttt{CONNECTING}, \texttt{CONNECTED}, \texttt{ERROR}).
+    \item \textbf{UI-3}: The application shall render live session duration and network throughput telemetry cards.
+\end{itemize}
+
+\subsubsection{Hardware Interfaces}
+\begin{itemize}
+    \item \textbf{HI-1}: The client shall communicate over standard 802.11a/b/g/n/ac/ax wireless LAN interfaces or 3GPP LTE/5G cellular radio modems.
+    \item \textbf{HI-2}: The client shall support ARM64-v8a and x86\_64 processors with hardware AES instructions.
+\end{itemize}
+
+\subsubsection{Software Interfaces}
+\begin{itemize}
+    \item \textbf{SI-1}: The client shall integrate with Android's \texttt{android.net.VpnService} API (API Level 26 through 34).
+    \item \textbf{SI-2}: Persistent storage shall interface with Android Keystore-backed \texttt{EncryptedSharedPreferences}.
+    \item \textbf{SI-3}: The server shall interface with the Linux kernel \texttt{/dev/net/tun} character device driver.
+\end{itemize}
+
+\subsection{Functional Requirements Catalog}
+
+Table~\ref{tab:srs_functional_catalog} documents the complete functional requirements hierarchy, establishing exact behavioral specifications for all software subsystems.
+
+\begin{longtable}{@{}P{1.8cm}P{3.4cm}P{6.4cm}P{2.4cm}@{}}
+  \caption{Formal Software Requirements Specification Catalog.} \label{tab:srs_functional_catalog} \\
+  \toprule
+  \textbf{SRS ID} & \textbf{Subsystem} & \textbf{Detailed Specification Description} & \textbf{Compliance} \\
+  \midrule
+  \endfirsthead
+  \multicolumn{4}{c}{\small\textit{Table \ref{tab:srs_functional_catalog} continued from previous page}} \\
+  \toprule
+  \textbf{SRS ID} & \textbf{Subsystem} & \textbf{Detailed Specification Description} & \textbf{Compliance} \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+
+  \textbf{SRS-F01} & Android Service & The application shall invoke \texttt{VpnService.prepare()} prior to tunnel initialization to verify operating system permission. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F02} & Socket Protection & The application shall invoke \texttt{protect()} on the TCP transport socket before connecting to the gateway to prevent routing loops. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F03} & Cryptography & The client and server shall execute ML-KEM-1024 key encapsulation (NIST FIPS 203) generating a 32-byte shared secret. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F04} & Authentication & The server shall sign the handshake transcript using ML-DSA-65 (NIST FIPS 204), producing a 3,309-byte digital signature. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F05} & Cryptography & The client shall verify the ML-DSA-65 signature against the pinned server public key before completing the session handshake. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F06} & Key Derivation & The system shall expand the shared secret into a 256-bit AES key using HKDF-SHA256 with salt $0^{32}$ and info \texttt{"QuantumSafeVPN-Session-Key"}. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F07} & Hashing Engine & The client shall evaluate lattice secret expansions using a pure-Kotlin Keccak-$f[1600]$ SHA3-256 permutation engine. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F08} & IP Allocation & The server shall allocate a dynamic \texttt{/32} lease from the \texttt{10.8.0.0/24} pool upon successful handshake completion. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F09} & Interface Setup & The client shall establish a virtual TUN interface configured with the assigned IP, netmask \texttt{255.255.255.0}, and route \texttt{0.0.0.0/0}. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F10} & DNS Redirection & The client shall direct all DNS queries to gateway-pushed resolvers (\texttt{1.1.1.1}, \texttt{8.8.8.8}), dropping cleartext port 53 datagrams. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F11} & Packet Framing & The system shall prefix every TCP frame with a 4-byte big-endian unsigned integer indicating exact payload length. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F12} & Encryption & The system shall encrypt all tunneled IP packets via AES-256-GCM using a fresh 12-byte random IV and appending a 16-byte authentication tag. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F13} & Anti-Replay & Plaintext payloads shall embed an 8-byte big-endian monotonic sequence counter; frames with $S \le S_{\text{last}}$ shall be dropped. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F14} & Gateway Routing & The server shall write decrypted packets to \texttt{tun0} and apply \texttt{iptables} NAT masquerading to forward packets to public WAN. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F15} & Return Dispatch & The server shall read packets from \texttt{tun0}, extract destination IP, query \texttt{SessionRouter}, encrypt, and forward to client socket. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F16} & Configuration & The client shall persist server host, port, MTU, and pinned certificate hashes within Android Keystore encrypted preferences. & Mandatory \\
+  \addlinespace
+  \textbf{SRS-F17} & Diagnostics & The client shall maintain a real-time event log buffer accessible via the Diagnostics and Settings screen. & Optional \\
+  \addlinespace
+  \textbf{SRS-F18} & Teardown & Disconnection shall flush buffers, close TCP sockets, close the TUN file descriptor, and remove foreground notifications. & Mandatory \\
+\end{longtable}

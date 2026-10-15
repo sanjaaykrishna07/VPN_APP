@@ -1,0 +1,722 @@
+import socket
+import struct
+import sys
+import os
+import threading
+import hashlib
+
+# ---------------------------------------------------------
+# Project path
+# ---------------------------------------------------------
+
+sys.path.append(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
+)
+
+# ---------------------------------------------------------
+# Quantum-Safe modules
+# ---------------------------------------------------------
+
+from vpn.tun import TunInterface
+
+from pqc.mlkem import (
+    generate_keypair,
+    decapsulate
+)
+
+from pqc.mldsa import (
+    verify
+)
+
+# ---------------------------------------------------------
+# Classical cryptography
+# ---------------------------------------------------------
+
+from crypto.classical import (
+    derive_session_key,
+    encrypt,
+    decrypt
+)
+
+# =========================================================
+# VPN CONFIGURATION
+# =========================================================
+
+SERVER_IP = "192.168.100.1"
+SERVER_PORT = 6000
+
+TUN_NAME = "tun0"
+TUN_IP = "10.8.0.2"
+TUN_NETWORK = "10.8.0.0/24"
+
+PROTOCOL_VERSION = b"QuantumSafeVPN-v1"
+
+# ---------------------------------------------------------
+# Trusted server identity
+#
+# SHA-256 fingerprint of:
+# keys/server_mldsa65_public.key
+#
+# DO NOT change this unless the server identity changes.
+# ---------------------------------------------------------
+
+EXPECTED_SERVER_MLDSA_SHA256 = (
+    "77497277cece090a1fc6054cb9f51a9fa7e4c9353a673dc133f675c22323a0dc"
+)
+
+# ---------------------------------------------------------
+# Expected ML-DSA-65 sizes
+# ---------------------------------------------------------
+
+MLDSA_PUBLIC_KEY_SIZE = 1952
+MLDSA_SIGNATURE_SIZE = 3309
+
+# ---------------------------------------------------------
+# Expected ML-KEM-1024 sizes
+# ---------------------------------------------------------
+
+MLKEM_PUBLIC_KEY_SIZE = 1568
+MLKEM_CIPHERTEXT_SIZE = 1568
+
+
+# =========================================================
+# FRAMING FUNCTIONS
+# =========================================================
+
+def recv_exact(sock, size):
+    """
+    Receive exactly 'size' bytes from a TCP socket.
+    """
+
+    data = b""
+
+    while len(data) < size:
+
+        chunk = sock.recv(
+            size - len(data)
+        )
+
+        if not chunk:
+            raise ConnectionError(
+                "Connection closed"
+            )
+
+        data += chunk
+
+    return data
+
+
+def send_frame(sock, data):
+    """
+    Send a length-prefixed frame.
+
+    Format:
+
+        4-byte length
+        payload
+    """
+
+    header = struct.pack(
+        "!I",
+        len(data)
+    )
+
+    sock.sendall(header)
+    sock.sendall(data)
+
+
+def recv_frame(sock):
+    """
+    Receive a length-prefixed frame.
+    """
+
+    header = recv_exact(
+        sock,
+        4
+    )
+
+    length = struct.unpack(
+        "!I",
+        header
+    )[0]
+
+    if length <= 0 or length > 65535:
+
+        raise ValueError(
+            f"Invalid packet length: {length}"
+        )
+
+    return recv_exact(
+        sock,
+        length
+    )
+
+
+# =========================================================
+# SERVER IDENTITY PINNING
+# =========================================================
+
+def verify_server_identity(dsa_public_key):
+    """
+    Verify that the server presented the trusted
+    ML-DSA-65 public key.
+
+    We compare the SHA-256 fingerprint of the received
+    public key against the fingerprint embedded in this
+    client.
+    """
+
+    print(
+        "[*] Verifying trusted ML-DSA-65 server identity..."
+    )
+
+    actual_fingerprint = hashlib.sha256(
+        dsa_public_key
+    ).hexdigest()
+
+    print(
+        f"[*] Server ML-DSA-65 fingerprint:\n"
+        f"    {actual_fingerprint}"
+    )
+
+    if actual_fingerprint != EXPECTED_SERVER_MLDSA_SHA256:
+
+        print(
+            "[!] SERVER IDENTITY VERIFICATION FAILED"
+        )
+
+        print(
+            "[!] The server public key is not trusted."
+        )
+
+        raise ConnectionError(
+            "Server ML-DSA-65 identity verification failed"
+        )
+
+    print(
+        "[+] Server ML-DSA-65 identity verified"
+    )
+
+
+# =========================================================
+# TUN → NETWORK
+# =========================================================
+
+def tun_to_network(
+    tun,
+    sock,
+    session_key
+):
+
+    try:
+
+        while True:
+
+            packet = tun.read_packet()
+
+            if not packet:
+                continue
+
+            # Encrypt IP packet using AES-256-GCM
+            encrypted_packet = encrypt(
+                session_key,
+                packet
+            )
+
+            # Send encrypted packet
+            send_frame(
+                sock,
+                encrypted_packet
+            )
+
+            print(
+                f"[TUN → VPN] "
+                f"{len(packet)} bytes "
+                f"→ encrypted "
+                f"{len(encrypted_packet)} bytes"
+            )
+
+    except Exception as e:
+
+        print(
+            f"[!] TUN → network stopped: {e}"
+        )
+
+
+# =========================================================
+# NETWORK → TUN
+# =========================================================
+
+def network_to_tun(
+    tun,
+    sock,
+    session_key
+):
+
+    try:
+
+        while True:
+
+            # Receive encrypted packet
+            encrypted_packet = recv_frame(
+                sock
+            )
+
+            # Decrypt AES-256-GCM packet
+            packet = decrypt(
+                session_key,
+                encrypted_packet
+            )
+
+            # Write decrypted IP packet to TUN
+            tun.write_packet(
+                packet
+            )
+
+            print(
+                f"[VPN → TUN] "
+                f"encrypted "
+                f"{len(encrypted_packet)} bytes "
+                f"→ decrypted "
+                f"{len(packet)} bytes"
+            )
+
+    except Exception as e:
+
+        print(
+            f"[!] Network → TUN stopped: {e}"
+        )
+
+
+# =========================================================
+# ML-KEM + ML-DSA HANDSHAKE
+# =========================================================
+
+def perform_handshake(sock):
+
+    print()
+    print("=" * 60)
+    print("QUANTUM-SAFE VPN HANDSHAKE")
+    print("=" * 60)
+
+    # -----------------------------------------------------
+    # 1. Receive server ML-DSA public key
+    # -----------------------------------------------------
+
+    print(
+        "[*] Waiting for ML-DSA-65 server public key..."
+    )
+
+    dsa_public_key = recv_frame(
+        sock
+    )
+
+    print(
+        f"[+] ML-DSA public key received: "
+        f"{len(dsa_public_key)} bytes"
+    )
+
+    # -----------------------------------------------------
+    # 2. Check ML-DSA public key size
+    # -----------------------------------------------------
+
+    if len(dsa_public_key) != MLDSA_PUBLIC_KEY_SIZE:
+
+        raise ValueError(
+            "Invalid ML-DSA-65 public key size"
+        )
+
+    # -----------------------------------------------------
+    # 3. Verify trusted server identity
+    # -----------------------------------------------------
+
+    verify_server_identity(
+        dsa_public_key
+    )
+
+    # -----------------------------------------------------
+    # 4. Generate ML-KEM-1024 client key pair
+    # -----------------------------------------------------
+
+    print(
+        "[*] Generating ML-KEM-1024 key pair..."
+    )
+
+    kem_public_key, kem_secret_key = (
+        generate_keypair()
+    )
+
+    print(
+        f"[+] ML-KEM public key: "
+        f"{len(kem_public_key)} bytes"
+    )
+
+    # -----------------------------------------------------
+    # 5. Check ML-KEM public key size
+    # -----------------------------------------------------
+
+    if len(kem_public_key) != MLKEM_PUBLIC_KEY_SIZE:
+
+        raise ValueError(
+            "Invalid ML-KEM-1024 public key size"
+        )
+
+    # -----------------------------------------------------
+    # 6. Send ML-KEM public key to server
+    # -----------------------------------------------------
+
+    send_frame(
+        sock,
+        kem_public_key
+    )
+
+    print(
+        "[+] ML-KEM public key sent"
+    )
+
+    # -----------------------------------------------------
+    # 7. Receive ML-KEM ciphertext
+    # -----------------------------------------------------
+
+    print(
+        "[*] Waiting for ML-KEM-1024 ciphertext..."
+    )
+
+    ciphertext = recv_frame(
+        sock
+    )
+
+    print(
+        f"[+] ML-KEM ciphertext received: "
+        f"{len(ciphertext)} bytes"
+    )
+
+    # -----------------------------------------------------
+    # 8. Check ML-KEM ciphertext size
+    # -----------------------------------------------------
+
+    if len(ciphertext) != MLKEM_CIPHERTEXT_SIZE:
+
+        raise ValueError(
+            "Invalid ML-KEM-1024 ciphertext size"
+        )
+
+    # -----------------------------------------------------
+    # 9. Receive ML-DSA signature
+    # -----------------------------------------------------
+
+    print(
+        "[*] Waiting for ML-DSA-65 signature..."
+    )
+
+    signature = recv_frame(
+        sock
+    )
+
+    print(
+        f"[+] ML-DSA signature received: "
+        f"{len(signature)} bytes"
+    )
+
+    # -----------------------------------------------------
+    # 10. Check ML-DSA signature size
+    # -----------------------------------------------------
+
+    if len(signature) != MLDSA_SIGNATURE_SIZE:
+
+        raise ValueError(
+            "Invalid ML-DSA-65 signature size"
+        )
+
+    # -----------------------------------------------------
+    # 11. Build handshake transcript
+    #
+    # This MUST match the server.
+    # -----------------------------------------------------
+
+    transcript = (
+        PROTOCOL_VERSION
+        + kem_public_key
+        + ciphertext
+    )
+
+    print(
+        "[*] Verifying ML-DSA-65 handshake signature..."
+    )
+
+    # -----------------------------------------------------
+    # 12. Verify ML-DSA signature
+    # -----------------------------------------------------
+
+    signature_valid = verify(
+        dsa_public_key,
+        transcript,
+        signature
+    )
+
+    if not signature_valid:
+
+        raise ConnectionError(
+            "ML-DSA handshake signature verification failed"
+        )
+
+    print(
+        "[+] ML-DSA-65 signature verified"
+    )
+
+    # -----------------------------------------------------
+    # 13. ML-KEM decapsulation
+    # -----------------------------------------------------
+
+    print(
+        "[*] Decapsulating ML-KEM-1024 ciphertext..."
+    )
+
+    shared_secret = decapsulate(
+        kem_secret_key,
+        ciphertext
+    )
+
+    print(
+        "[+] ML-KEM decapsulation successful"
+    )
+
+    # -----------------------------------------------------
+    # 14. Derive AES-256 session key
+    #
+    # ML-KEM shared secret
+    #       ↓
+    # HKDF-SHA256
+    #       ↓
+    # AES-256-GCM key
+    # -----------------------------------------------------
+
+    session_key = derive_session_key(
+        shared_secret
+    )
+
+    print(
+        "[+] AES-256-GCM session key established"
+    )
+
+    print()
+    print("=" * 60)
+    print("QUANTUM-SAFE VPN TUNNEL READY")
+    print("=" * 60)
+
+    print(
+        "Key Exchange    : ML-KEM-1024"
+    )
+
+    print(
+        "Authentication   : ML-DSA-65"
+    )
+
+    print(
+        "KDF              : HKDF-SHA256"
+    )
+
+    print(
+        "Encryption       : AES-256-GCM"
+    )
+
+    print(
+        "Server Identity  : PINNED"
+    )
+
+    print("=" * 60)
+
+    return session_key
+
+
+# =========================================================
+# MAIN
+# =========================================================
+
+def main():
+
+    tun = None
+    sock = None
+
+    try:
+
+        # -------------------------------------------------
+        # Create TUN interface
+        # -------------------------------------------------
+
+        tun = TunInterface(
+            TUN_NAME
+        )
+
+        tun.create()
+
+        print(
+            f"[+] TUN interface: {tun.name}"
+        )
+
+        # -------------------------------------------------
+        # Configure TUN address
+        #
+        # We use ip command from Python so that the
+        # namespace gets:
+        #
+        # 10.8.0.2/24
+        # -------------------------------------------------
+
+        print(
+            f"[*] Configuring {tun.name} "
+            f"with {TUN_IP}/24"
+        )
+
+        result = os.system(
+            f"ip addr replace "
+            f"{TUN_IP}/24 "
+            f"dev {tun.name}"
+        )
+
+        if result != 0:
+
+            raise RuntimeError(
+                "Failed to configure TUN IP address"
+            )
+
+        result = os.system(
+            f"ip link set "
+            f"{tun.name} up"
+        )
+
+        if result != 0:
+
+            raise RuntimeError(
+                "Failed to bring TUN interface up"
+            )
+
+        print(
+            f"[+] {tun.name} configured: "
+            f"{TUN_IP}/24"
+        )
+
+        # -------------------------------------------------
+        # Create TCP socket
+        # -------------------------------------------------
+
+        sock = socket.socket(
+            socket.AF_INET,
+            socket.SOCK_STREAM
+        )
+
+        # Avoid unnecessary TIME_WAIT problems
+        sock.setsockopt(
+            socket.SOL_SOCKET,
+            socket.SO_REUSEADDR,
+            1
+        )
+
+        print()
+        print(
+            f"[*] Connecting to "
+            f"{SERVER_IP}:{SERVER_PORT}"
+        )
+
+        # -------------------------------------------------
+        # Connect to VPN server
+        # -------------------------------------------------
+
+        sock.connect(
+            (
+                SERVER_IP,
+                SERVER_PORT
+            )
+        )
+
+        print(
+            "[+] VPN transport connected"
+        )
+
+        # -------------------------------------------------
+        # Quantum-safe handshake
+        # -------------------------------------------------
+
+        session_key = perform_handshake(
+            sock
+        )
+
+        # -------------------------------------------------
+        # Start packet forwarding threads
+        # -------------------------------------------------
+
+        thread_tx = threading.Thread(
+            target=tun_to_network,
+            args=(
+                tun,
+                sock,
+                session_key
+            ),
+            daemon=True
+        )
+
+        thread_rx = threading.Thread(
+            target=network_to_tun,
+            args=(
+                tun,
+                sock,
+                session_key
+            ),
+            daemon=True
+        )
+
+        thread_tx.start()
+        thread_rx.start()
+
+        # -------------------------------------------------
+        # Keep VPN running
+        # -------------------------------------------------
+
+        thread_tx.join()
+        thread_rx.join()
+
+    except KeyboardInterrupt:
+
+        print()
+        print(
+            "[*] Stopping VPN client..."
+        )
+
+    except Exception as e:
+
+        print(
+            f"[!] VPN client error: {e}"
+        )
+
+    finally:
+
+        if sock is not None:
+
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+        if tun is not None:
+
+            try:
+                tun.close()
+            except Exception:
+                pass
+
+        print(
+            "[+] VPN client stopped"
+        )
+
+
+# =========================================================
+# PROGRAM ENTRY POINT
+# =========================================================
+
+if __name__ == "__main__":
+
+    main()

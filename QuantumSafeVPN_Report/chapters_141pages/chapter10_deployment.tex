@@ -1,0 +1,156 @@
+% ============================================================
+%  CHAPTER 10: DEPLOYMENT, LIMITATIONS, AND MAINTENANCE
+% ============================================================
+
+\chapter{DEPLOYMENT, LIMITATIONS, AND MAINTENANCE}
+\label{chap:deployment}
+
+\section{Production Deployment Architecture}
+\label{sec:deployment_architecture}
+
+Deploying QuantumSafe VPN in an enterprise or personal privacy environment involves establishing a hardened, resilient infrastructure consisting of two operational endpoints: the \textbf{Linux VPN Gateway} and the \textbf{Android Mobile Endpoints}. The gateway is deployed within an enterprise Demilitarized Zone (DMZ) or hosted on a virtual private server (VPS) with direct public WAN connectivity.
+
+\section{Linux Gateway Server Setup and System Configuration}
+\label{sec:linux_server_setup}
+
+The gateway operates on Kali Linux 2024.x, Ubuntu Server 22.04 LTS, or Debian 12 with Linux Kernel 5.15+.
+
+\subsection{Prerequisite System Packages}
+Prior to starting the daemon, essential networking and runtime utilities are installed:
+\begin{lstlisting}[language=bash, caption={Linux Server Dependency Installation.}]
+sudo apt-get update && sudo apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    iptables \
+    iproute2 \
+    net-tools \
+    tcpdump
+\end{lstlisting}
+
+\subsection{Enabling Kernel IPv4 Packet Forwarding}
+To permit the Linux kernel to route packets between the virtual \texttt{tun0} interface and the physical \texttt{eth0} WAN interface, IPv4 forwarding must be enabled:
+\begin{lstlisting}[language=bash, caption={Enabling Linux Kernel IPv4 Forwarding.}]
+# Enable runtime forwarding
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# Persist across system reboots
+echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.d/99-vpn-forward.conf
+sudo sysctl --system
+\end{lstlisting}
+
+\subsection{Configuring Firewall and iptables NAT Masquerading}
+The server requires an explicit \texttt{POSTROUTING} rule in the \texttt{nat} table to translate internal VPN client IP addresses (\texttt{10.8.0.0/24}) to the server's public WAN IP:
+\begin{lstlisting}[language=bash, caption={iptables NAT and Forwarding Rules.}]
+WAN_IFACE="eth0"
+VPN_SUBNET="10.8.0.0/24"
+
+# Clear existing legacy rules
+sudo iptables -t nat -F POSTROUTING
+sudo iptables -F FORWARD
+
+# Masquerade outbound traffic from VPN clients
+sudo iptables -t nat -A POSTROUTING -s $VPN_SUBNET -o $WAN_IFACE -j MASQUERADE
+
+# Allow bidirectional forwarding between tun0 and physical WAN
+sudo iptables -A FORWARD -i tun0 -o $WAN_IFACE -j ACCEPT
+sudo iptables -A FORWARD -i $WAN_IFACE -o tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# Allow incoming TCP handshakes on VPN port 7000
+sudo iptables -A INPUT -p tcp --dport 7000 -j ACCEPT
+\end{lstlisting}
+
+\section{Automated Gateway Deployment Scripting}
+\label{sec:automated_deployment_scripts}
+
+To eliminate human error during gateway initialization, the project repository provides automated management scripts in \texttt{scripts/}:
+\begin{itemize}
+    \item \texttt{scripts/setup\_network.sh}: Configures kernel sysctl parameters and sets up \texttt{iptables} NAT rules.
+    \item \texttt{scripts/start\_server.sh}: Validates permissions, checks listening ports, and starts \texttt{vpn/tunnel\_server.py} within a detached screen session or systemd daemon.
+\end{itemize}
+
+\begin{lstlisting}[language=bash, caption={Server Launch Script (scripts/start\_server.sh).}]
+#!/usr/bin/env bash
+set -e
+
+echo "[*] Initializing QuantumSafe VPN Linux Gateway..."
+if [ "$EUID" -ne 0 ]; then
+  echo "[-] Error: This deployment script must be run as root."
+  exit 1
+fi
+
+# Execute network forwarding setup
+bash "$(dirname "$0")/setup_network.sh"
+
+# Launch Python multi-client VPN daemon
+export PYTHONPATH="."
+export VPN_SERVER_PORT=7000
+echo "[+] Starting tunnel_server.py on port 7000..."
+python3 vpn/tunnel_server.py
+\end{lstlisting}
+
+\section{Android Client Deployment and Sideloading}
+\label{sec:android_client_deployment}
+
+The Android mobile client is distributed via signed production APK artifacts:
+\begin{enumerate}
+    \item \textbf{Device Preparation}: On the target Android smartphone, enable ``Install unknown apps'' for the browser or file manager within \textit{Settings $\to$ Apps $\to$ Special app access}.
+    \item \textbf{APK Sideloading via ADB}: Connect the device via USB with USB Debugging enabled, and execute:
+    \begin{lstlisting}[language=bash, caption={ADB Sideload Installation Command.}]
+adb install -r dist/QuantumSafe-VPN-release.apk
+    \end{lstlisting}
+    \item \textbf{Initial Launch and Configuration}:
+    \begin{itemize}
+        \item Open ``QuantumSafe VPN'' from the application launcher.
+        \item Navigate to the \textbf{Server Config} tab and input the Linux gateway's IP address (e.g., \texttt{11.12.5.8}) and port (\texttt{7000}).
+        \item Return to the \textbf{Home} tab and tap the primary \textbf{``Connect''} button.
+        \item Tap \textbf{``OK''} on the Android system \texttt{VpnService} connection request dialog.
+    \end{itemize}
+\end{enumerate}
+
+\section{Operational Troubleshooting and Diagnostic Runbook}
+\label{sec:troubleshooting_runbook}
+
+Table~\ref{tab:troubleshooting_guide} details common operational issues, diagnostic indicators, and verified resolution steps.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Operational Troubleshooting and Diagnostic Runbook.}
+  \label{tab:troubleshooting_guide}
+  \begin{tabular}{@{}P{3.2cm}P{4.2cm}P{5.8cm}@{}}
+    \toprule
+    \textbf{Observed Symptom} & \textbf{Probable Root Cause} & \textbf{Prescribed Resolution Procedure} \\
+    \midrule
+    \textbf{Connection Timeout (UI displays ERROR)} & TCP port 7000 blocked by intermediate firewall; server daemon inactive & 1. Verify server daemon is running: \texttt{ss -tulpn | grep 7000}.\\ & & 2. Inspect intermediate firewall / security groups.\\ & & 3. Confirm phone and server share network routing. \\
+    \addlinespace
+    \textbf{Tunnel Connected but No Internet Access} & Linux kernel IP forwarding disabled; \texttt{iptables} masquerading rule missing & 1. Check forwarding: \texttt{sysctl net.ipv4.ip\_forward}.\\ & & 2. Verify NAT table: \texttt{iptables -t nat -L -v -n}.\\ & & 3. Run \texttt{sudo bash scripts/setup\_network.sh}. \\
+    \addlinespace
+    \textbf{Signature Verification Failure} & Server identity key modified; MitM proxy active on port 7000 & 1. Inspect server log for key regeneration.\\ & & 2. Clear cached identity hash in app Settings.\\ & & 3. Re-verify server \texttt{keys/server\_mldsa65\_public.key}. \\
+    \addlinespace
+    \textbf{Phone UI Freezes upon Connecting} & Socket protection failure triggering recursive kernel loop & 1. Verify \texttt{protect(socket)} returned \texttt{true}.\\ & & 2. Ensure Android OS has not restricted VPN app.\\ & & 3. Restart application process. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Inherent Architectural and Technical Limitations}
+\label{sec:system_limitations}
+
+While QuantumSafe VPN delivers robust post-quantum tunneling, several technical limitations exist in the current engineering release:
+
+\begin{enumerate}
+    \item \textbf{TCP Encapsulation Overhead}: The current release tunnels IP datagrams over TCP. Under severe cellular network congestion with elevated packet loss, nested TCP retransmission timers can induce temporary throughput degradation (TCP-over-TCP meltdown).
+    \item \textbf{Single-Hop Gateway Architecture}: The system operates as a client-to-gateway star topology. It does not currently support multi-hop onion routing or dynamic decentralized mesh topologies (such as Tailscale or WireGuard peer meshes).
+    \item \textbf{IPv4 Exclusivity}: The virtual TUN interface captures and routes IPv4 traffic. While IPv6 is intentionally suppressed on the client to prevent DNS leaks, native IPv6 dual-stack encapsulation is not yet implemented.
+    \item \textbf{Pure-Kotlin Mathematical Fallback}: While functional and memory-safe, pure-Kotlin polynomial arithmetic does not leverage platform-specific SIMD vector instructions (e.g., ARM NEON), resulting in slightly higher CPU cycle counts than highly optimized C/assembly implementations.
+\end{enumerate}
+
+\section{Security Maintenance and Dependency Lifecycle}
+\label{sec:security_maintenance}
+
+To maintain long-term security posture:
+\begin{itemize}
+    \item \textbf{Cryptographic Parameter Tracking}: As NIST and the cryptographic research community continue to audit finalized FIPS 203 and 204 implementations, parameter sets and polynomial round constants must be tracked against official NIST Special Publications.
+    \item \textbf{Zero-Logging Enforcement}: The Linux gateway operates under strict operational hygiene, discarding all packet payload records immediately after forwarding. Session routing entries are maintained strictly in volatile RAM and purged upon socket termination.
+    \item \textbf{Server Key Rotation}: Server ML-DSA-65 identity keys should be rotated annually, with public key fingerprints published out-of-band via secure administrative channels.
+\end{itemize}

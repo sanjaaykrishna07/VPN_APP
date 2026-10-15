@@ -1,0 +1,27 @@
+# QuantumSafeVPN Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 7000
+  tun_name: "tun0"
+  tun_network: "10.8.0.0/24"
+  server_ip: "10.8.0.1"
+  client_ip_start: "10.8.0.2"
+  client_ip_end: "10.8.0.254"
+  mtu: 1400
+  dns_servers:
+    - "1.1.1.1"
+    - "8.8.8.8"
+  enable_nat: true
+  wan_interface: "auto" # auto-detected or specific like eth0/wlan0
+  mode: "standalone" # standalone (real interface) or namespace_lab
+
+crypto:
+  kem_algorithm: "ML-KEM-1024"
+  dsa_algorithm: "ML-DSA-65"
+  symmetric_cipher: "AES-256-GCM"
+  kdf: "HKDF-SHA256"
+  replay_window_size: 64
+
+logging:
+  level: "INFO"
+  log_file: "logs/quantumsafevpn.log"

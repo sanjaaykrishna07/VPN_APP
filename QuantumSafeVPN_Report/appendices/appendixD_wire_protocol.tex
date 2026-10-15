@@ -1,0 +1,115 @@
+% ============================================================
+%  APPENDIX D: WIRE PROTOCOL SPECIFICATION & SCHEMAS
+% ============================================================
+
+\chapter{WIRE PROTOCOL SPECIFICATION AND CONFIGURATION SCHEMAS}
+\label{app:wire_protocol}
+
+This appendix provides the formal byte-level protocol specification governing all network communications between the QuantumSafe VPN Android client and the Linux gateway.
+
+\section{Transport Layer Characteristics}
+\begin{itemize}
+    \item Underlying Transport: Transmission Control Protocol (TCP).
+    \item Default Listener Port: 7000 (configurable via server environment variable \texttt{VPN\_}\allowbreak\texttt{SERVER\_}\allowbreak\texttt{PORT}).
+    \item Byte Ordering: Big-Endian (Network Byte Order, RFC 1700).
+    \item Stream Framing Mechanism: 4-byte unsigned 32-bit length prefix preceding every protocol data unit.
+\end{itemize}
+
+\section{Binary Wire Framing Formats}
+
+\subsection{Framing Header Specification}
+Every transmission over the transport socket is encapsulated in a discrete frame:
+\begin{table}[htbp]
+  \centering
+  \small
+  \setlength{\tabcolsep}{3pt}
+  \caption{Transport Stream Framing Structure.}
+  \label{tab:stream_framing_struct}
+  \begin{tabularx}{\linewidth}{@{}p{2.3cm}p{2.6cm}p{2.6cm}Y@{}}
+    \toprule
+    \textbf{Byte Offset} & \textbf{Field Name} & \textbf{Data Type} & \textbf{Description} \\
+    \midrule
+    \texttt{0x00 -- 0x03} & \texttt{PAYLOAD\_LEN} & uint32 (Big-Endian) & Exact length in bytes of the immediately following payload ($1 \le L \le 65535$). \\
+    \texttt{0x04 -- 0x04+L} & \texttt{PAYLOAD\_}\allowbreak\texttt{DATA} & byte array & Encapsulated protocol payload. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Encrypted Data Tunnel Framing Specification}
+During active Layer~3 tunneling, \texttt{PAYLOAD\_}\allowbreak\texttt{DATA} adheres strictly to the layout defined in Table~\ref{tab:encrypted_frame_struct}.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \setlength{\tabcolsep}{3pt}
+  \caption{Encrypted Data Tunnel Frame Structure.}
+  \label{tab:encrypted_frame_struct}
+  \begin{tabularx}{\linewidth}{@{}p{2.3cm}p{2.6cm}p{2.6cm}Y@{}}
+    \toprule
+    \textbf{Byte Offset} & \textbf{Field Name} & \textbf{Data Type} & \textbf{Description} \\
+    \midrule
+    \texttt{0x00 -- 0x0B} & \texttt{GCM\_NONCE} & byte[12] & Fresh cryptographically secure random Initialization Vector (IV). \\
+    \texttt{0x0C -- 0x13} & \texttt{SEQ\_COUNTER} & uint64 (Big-Endian) & Monotonic sequence number (encrypted within GCM payload). \\
+    \texttt{0x14 -- 0x14+N} & \texttt{IP\_DATAGRAM} & byte[N] & Raw IPv4 packet payload ($20 \le N \le 1400$). \\
+    \texttt{End - 16} & \texttt{AUTH\_TAG} & byte[16] & 128-bit Galois Message Authentication Code (GMAC) tag. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Handshake Transcript and Serialization}
+
+\subsection{Stage 3 Authentication Transcript}
+The server's ML-DSA-65 digital signature is evaluated over the contiguous byte concatenation of the protocol version string, the client's ML-KEM-1024 public key, and the server's ciphertext:
+\begin{equation}
+\text{Transcript} = \texttt{b"QuantumSafeVPN-v1"} \parallel pk_{\text{client}} \parallel c
+\end{equation}
+\begin{itemize}
+    \item Length of Protocol Header: 17 Bytes.
+    \item Length of $pk_{\text{client}}$: 1,568 Bytes.
+    \item Length of Ciphertext $c$: 1,568 Bytes.
+    \item Total Transcript Size Signed: Exactly 3,153 Bytes.
+\end{itemize}
+
+\subsection{Stage 3C Client Configuration JSON Schema}
+The client configuration block is serialized as a UTF-8 JSON object following the schema in Listing~\ref{lst:config_json_schema}.
+
+\begin{lstlisting}[language=json, caption={Client Configuration Payload JSON Schema.}, label={lst:config_json_schema}]
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QuantumSafeVpnClientConfig",
+  "type": "object",
+  "properties": {
+    "assigned_ip": {
+      "type": "string",
+      "format": "ipv4",
+      "description": "Virtual IPv4 address allocated to mobile client TUN interface."
+    },
+    "netmask": {
+      "type": "string",
+      "format": "ipv4",
+      "default": "255.255.255.0",
+      "description": "Subnet mask defining the virtual VPN network prefix."
+    },
+    "server_ip": {
+      "type": "string",
+      "format": "ipv4",
+      "default": "10.8.0.1",
+      "description": "Internal virtual gateway IP address assigned to server tun0."
+    },
+    "dns": {
+      "type": "array",
+      "items": { "type": "string", "format": "ipv4" },
+      "minItems": 1,
+      "description": "Array of recursive DNS resolver IP addresses pushed to client."
+    },
+    "mtu": {
+      "type": "integer",
+      "minimum": 1280,
+      "maximum": 1500,
+      "default": 1400,
+      "description": "Maximum Transmission Unit for virtual TUN interface."
+    }
+  },
+  "required": ["assigned_ip", "netmask", "server_ip", "dns", "mtu"]
+}
+\end{lstlisting}

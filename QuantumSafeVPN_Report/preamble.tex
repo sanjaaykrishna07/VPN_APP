@@ -1,0 +1,98 @@
+% ============================================================
+%  preamble.tex - Custom Packages, Settings & Macros
+% ============================================================
+
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{needspace}
+\usepackage{placeins}
+\usepackage{subcaption}
+\usepackage{tabularx}
+
+% TikZ and Drawing Libraries
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,fit,backgrounds,decorations.pathreplacing,calc}
+
+% Column Types
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{M}[1]{>{\centering\arraybackslash}m{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{Z}{>{\centering\arraybackslash}X}
+
+% URLs and Breaks
+\makeatletter
+\g@addto@macro\UrlBreaks{\do\-\do\/\do\_}
+\makeatother
+\Urlmuskip=0mu plus 2mu\relax
+
+% Colors
+\definecolor{vpnblue}{RGB}{25,113,194}
+\definecolor{darkcharcoal}{RGB}{26,29,32}
+\definecolor{mutedgrey}{RGB}{108,117,125}
+\definecolor{codebg}{RGB}{248,249,250}
+\definecolor{codeborder}{RGB}{222,226,230}
+\definecolor{codecomment}{RGB}{46,125,50}
+\definecolor{codekeyword}{RGB}{21,101,192}
+\definecolor{codestring}{RGB}{198,40,40}
+
+% Code Listing Settings
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    breakatwhitespace=false,
+    postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+    columns=flexible,
+    frame=single,
+    rulecolor=\color{codeborder},
+    backgroundcolor=\color{codebg},
+    keywordstyle=\color{codekeyword}\bfseries,
+    commentstyle=\color{codecomment}\itshape,
+    stringstyle=\color{codestring},
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{mutedgrey},
+    numbersep=8pt,
+    tabsize=4,
+    captionpos=b,
+    keepspaces=true
+}
+
+\lstdefinelanguage{Kotlin}{
+  keywords={abstract, actual, annotation, as, as?, break, by, catch, class, companion, const, constructor, continue, coroutine, crossinline, data, delegate, do, dynamic, else, enum, expect, external, false, final, finally, for, fun, get, if, import, in, infix, init, inline, inner, interface, internal, is, !is, lazy, noinline, null, object, open, operator, out, override, package, private, protected, public, reified, return, sealed, set, super, suspend, tailrec, this, throw, true, try, typealias, typeof, val, var, vararg, when, where, while},
+  morekeywords={StateFlow, MutableStateFlow, CoroutineScope, Dispatchers, launch, withContext, Builder, VpnService, ParcelFileDescriptor, ByteBuffer, ByteOrder, SecretKey, Cipher, GCMParameterSpec, MessageDigest},
+  sensitive=true,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+  morestring=[s]{"""}{"""}
+}
+
+\lstdefinelanguage{json}{
+  keywords={true,false,null},
+  sensitive=false,
+  comment=[l]{//},
+  morestring=[b]",
+  morestring=[b]'
+}
+
+% Figure Placement Macro
+\newcommand{\figcustom}[3][0.9\textwidth]{%
+  \begin{figure}[htbp]
+    \centering
+    \includegraphics[width=#1,height=0.65\textheight,keepaspectratio]{figures/#2}
+    \caption{#3}
+    \label{fig:#2}
+  \end{figure}
+}
+
+
+

@@ -1,0 +1,440 @@
+% ============================================================
+%  CHAPTER 7: IMPLEMENTATION DETAILS
+% ============================================================
+
+\chapter{IMPLEMENTATION DETAILS}
+\label{chap:implementation}
+
+\section{Project Directory Structure and Repository Organization}
+\label{sec:directory_structure}
+
+The QuantumSafe VPN codebase is organized into two primary sub-projects within a unified engineering repository: the native Kotlin Android client application and the companion multi-client Python/Linux gateway server.
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize, caption={Repository Directory Structure.}]
+VPN_APP/
+|-- android/                             # Native Android Client Project
+|   |-- app/
+|   |   |-- src/main/
+|   |   |   |-- AndroidManifest.xml      # OS permissions & service declarations
+|   |   |   |-- java/com/quantumsafe/vpn/
+|   |   |   |   |-- MainActivity.kt      # Application entry point & navigation
+|   |   |   |   |-- QuantumSafeVpnService.kt # Core VpnService & TUN packet loop
+|   |   |   |   |-- crypto/
+|   |   |   |   |   `-- PqcEngine.kt     # Pure-Kotlin PQC & AES-GCM engine
+|   |   |   |   |-- model/
+|   |   |   |   |   `-- VpnModels.kt     # Data models & state representations
+|   |   |   |   |-- service/
+|   |   |   |   |   `-- VpnServiceBridge.kt # Inter-process communication bridge
+|   |   |   |   |-- storage/
+|   |   |   |   |   `-- SecurityManager.kt  # Android Keystore configuration storage
+|   |   |   |   |-- ui/
+|   |   |   |   |   |-- MainScreen.kt    # Root UI scaffold & navigation bar
+|   |   |   |   |   |-- screens/
+|   |   |   |   |   |   |-- HomeScreen.kt # Primary connect & telemetry dashboard
+|   |   |   |   |   |   |-- ServerConfigScreen.kt # Server endpoint configuration
+|   |   |   |   |   |   |-- SecurityDetailsScreen.kt # Cryptographic telemetry
+|   |   |   |   |   |   `-- SettingsScreen.kt     # Diagnostics & terminal logs
+|   |   |   |   |   `-- theme/
+|   |   |   |   |       `-- Theme.kt     # Minimal white design tokens
+|   |   |   |   `-- viewmodel/
+|   |   |   |       `-- VpnViewModel.kt  # Reactive MVVM business logic
+|   |   |-- build.gradle                 # Module dependencies & compiler flags
+|   `-- gradle/                          # Gradle wrapper binaries
+|-- vpn/                                 # Linux Gateway Server Daemon
+|   |-- tunnel_server.py                 # Multi-client TCP listener & dispatch
+|   |-- ip_pool.py                       # Thread-safe 10.8.0.0/24 IP pool
+|   |-- nat_manager.py                   # Automated iptables NAT masquerading
+|   |-- tun.py                           # Linux /dev/net/tun interface wrapper
+|   `-- config.py                        # Server configuration loader
+|-- pqc/                                 # Server Post-Quantum Modules
+|   |-- mlkem.py                         # ML-KEM-1024 encapsulation & decapsulation
+|   `-- mldsa.py                         # ML-DSA-65 identity generation & signing
+|-- crypto/                              # Classical Symmetric Primitives
+|   `-- classical.py                     # HKDF-SHA256 & AES-256-GCM AEAD
+|-- tests/                               # Comprehensive Automated Test Suites
+|-- dist/                                # Built Production Debug & Release APKs
+`-- releases/                            # Distribution Artifacts & Checksums
+\end{lstlisting}
+
+\section{Android Gradle Build Configuration}
+\label{sec:gradle_build_config}
+
+The Android mobile client is configured via Gradle 8.9 utilizing Android Gradle Plugin (AGP) version 8.3.2 and Kotlin 1.9.22.
+
+The module build script (\texttt{android/app/build.gradle}) defines strict SDK targets:
+\begin{lstlisting}[language=Kotlin, caption={Gradle Build Configuration Excerpt.}]
+android {
+    namespace = "com.quantumsafe.vpn"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.quantumsafe.vpn"
+        minSdk = 26              // Android 8.0 (Oreo)
+        targetSdk = 34           // Android 14 (Upside Down Cake)
+        versionCode = 1
+        versionName = "1.0.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.8"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs += listOf(
+            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        )
+    }
+}
+\end{lstlisting}
+
+Key dependencies include:
+\begin{itemize}
+    \item \texttt{androidx.compose.material3:material3:1.2.0}: Material 3 composables.
+    \item \texttt{androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0}: Reactive ViewModel binding.
+    \item \texttt{org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3}: Asynchronous coroutine workers.
+    \item \texttt{androidx.security:security-crypto:1.1.0-alpha06}: Hardware-backed Keystore encryption.
+\end{itemize}
+
+\section{Android Manifest and Foreground Service Compliance}
+\label{sec:manifest_service_declaration}
+
+Android~14 (API Level~34) enforces strict security constraints on background execution, requiring explicit foreground service type declarations to prevent silent application suspension.
+
+In \texttt{AndroidManifest.xml}:
+\begin{lstlisting}[language=XML, caption={AndroidManifest Service and Permission Declarations.}]
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:label="QuantumSafe VPN"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.QuantumSafeVPN">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".QuantumSafeVpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="systemExempted"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
+\end{lstlisting}
+
+The service declares \texttt{android:foregroundServiceType="systemExempted"} in accordance with Android 14 guidelines for VPN providers, ensuring that the operating system's battery optimization daemon does not terminate the socket during continuous background operation.
+
+\section{Core Android VPN Service Implementation}
+\label{sec:core_vpn_service_impl}
+
+The \texttt{QuantumSafeVpnService} class extends \texttt{android.net.VpnService}, managing the core lifecycle of the tunnel connection.
+
+\subsection{Foreground Notification Lifecycle}
+When initiated, the service builds and binds an ongoing system notification displaying connection state, target gateway IP, and an active ``Disconnect'' pending intent:
+\begin{lstlisting}[language=Kotlin, caption={Foreground Service Notification Binding.}]
+private fun createNotification(statusText: String): Notification {
+    val channelId = "quantumsafe_vpn_channel"
+    val channel = NotificationChannel(
+        channelId,
+        "VPN Connection Service",
+        NotificationManager.IMPORTANCE_LOW
+    )
+    getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+
+    val disconnectIntent = PendingIntent.getService(
+        this, 0,
+        Intent(this, QuantumSafeVpnService::class.java).apply { action = "ACTION_DISCONNECT" },
+        PendingIntent.FLAG_IMMUTABLE
+    )
+
+    return NotificationCompat.Builder(this, channelId)
+        .setContentTitle("QuantumSafe VPN")
+        .setContentText(statusText)
+        .setSmallIcon(R.drawable.ic_vpn_lock)
+        .setOngoing(true)
+        .addAction(R.drawable.ic_stop, "Disconnect", disconnectIntent)
+        .build()
+}
+\end{lstlisting}
+
+\subsection{Socket Bypassing and Non-blocking Connection}
+Prior to establishing the TCP connection to the gateway on port 7000, the socket must be protected:
+\begin{lstlisting}[language=Kotlin, caption={Socket Protection in QuantumSafeVpnService.}]
+val socket = Socket()
+val isProtected = protect(socket)
+if (!isProtected) {
+    Log.e(TAG, "Critical failure: Socket protect returned false!")
+    broadcastError("Failed to protect transport socket from VPN loop.")
+    return
+}
+socket.tcpNoDelay = true
+socket.connect(InetSocketAddress(serverHost, serverPort), 10000)
+\end{lstlisting}
+Enabling \texttt{tcpNoDelay = true} disables Nagle's algorithm, ensuring that small encapsulated packets (such as interactive SSH keystrokes or TCP ACKs) are transmitted immediately without artificial 40\,ms buffering delays.
+
+\section{Pure-Kotlin Post-Quantum Cryptographic Engine (\texttt{PqcEngine.kt})}
+\label{sec:pqc_engine_impl}
+
+The cryptographic engine \texttt{PqcEngine.kt} provides high-performance, memory-safe execution of lattice arithmetic, hashing, and authenticated encryption.
+
+\subsection{Handshake Execution Logic}
+The client executes the 4-stage post-quantum cryptographic exchange over the connected socket:
+\begin{lstlisting}[language=Kotlin, caption={Handshake Execution in PqcEngine.}]
+fun performHandshake(socket: Socket): HandshakeResult {
+    val inputStream = DataInputStream(socket.getInputStream())
+    val outputStream = DataOutputStream(socket.getOutputStream())
+
+    // Stage 1: Receive ML-DSA-65 Server Public Key (1952 Bytes)
+    val serverDsaPk = readFrame(inputStream)
+    if (serverDsaPk.size != 1952) {
+        throw SecurityException("Invalid server ML-DSA public key size: ${serverDsaPk.size}")
+    }
+
+    // Stage 2: Generate ML-KEM-1024 Ephemeral Keypair & Send Public Key (1568 Bytes)
+    val (kemPk, kemSk) = generateMlkemKeypair()
+    sendFrame(outputStream, kemPk)
+
+    // Stage 3: Receive Ciphertext (1568B) and ML-DSA Signature (3309B)
+    val ciphertext = readFrame(inputStream)
+    val signature = readFrame(inputStream)
+
+    // Verify Server Signature over Transcript
+    val transcript = "QuantumSafeVPN-v1".toByteArray(Charsets.UTF_8) + kemPk + ciphertext
+    val isSigValid = verifyMldsa(serverDsaPk, transcript, signature)
+    if (!isSigValid) {
+        throw SecurityException("Server identity verification failed! Signature invalid.")
+    }
+
+    // Decapsulate Shared Secret
+    val sharedSecret = decapsulateMlkem(kemSk, ciphertext)
+
+    // Stage 4: Receive Configuration JSON Payload
+    val configJsonBytes = readFrame(inputStream)
+    val config = parseConfigJson(configJsonBytes)
+
+    // Derive AES-256-GCM Session Key via HKDF-SHA256
+    val sessionKey = deriveSessionKey(sharedSecret)
+
+    return HandshakeResult(sessionKey, config)
+}
+\end{lstlisting}
+
+\subsection{Symmetric Packet Framing and Galois/Counter Mode Encryption}
+For line-rate packet transmission, \texttt{PqcEngine} encapsulates data frames:
+\begin{lstlisting}[language=Kotlin, caption={AES-256-GCM Packet Framing in PqcEngine.}]
+fun encryptPacket(plaintext: ByteArray, sequenceNumber: Long): ByteArray {
+    val iv = ByteArray(12)
+    secureRandom.nextBytes(iv)
+
+    // Prepend 64-bit monotonic sequence number
+    val payloadBuffer = ByteBuffer.allocate(8 + plaintext.size)
+    payloadBuffer.order(ByteOrder.BIG_ENDIAN)
+    payloadBuffer.putLong(sequenceNumber)
+    payloadBuffer.put(plaintext)
+    val dataToEncrypt = payloadBuffer.array()
+
+    // Initialize AES-256-GCM Cipher
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    val spec = GCMParameterSpec(128, iv) // 128-bit authentication tag
+    cipher.init(Cipher.ENCRYPT_MODE, secretKey, spec)
+    val ciphertextAndTag = cipher.doFinal(dataToEncrypt)
+
+    // Assemble final wire frame: [IV (12B)] + [Ciphertext + Tag (16B)]
+    val frameBuffer = ByteBuffer.allocate(12 + ciphertextAndTag.size)
+    frameBuffer.put(iv)
+    frameBuffer.put(ciphertextAndTag)
+    return frameBuffer.array()
+}
+\end{lstlisting}
+
+\section{Pure-Kotlin Keccak-$f[1600]$ SHA3-256 Implementation}
+\label{sec:keccak_impl_walkthrough}
+
+To eliminate cryptographic divergence with Python's \texttt{hashlib.sha3\_256}, \texttt{PqcEngine} implements a pure-Kotlin Keccak sponge function conforming to NIST FIPS 202:
+
+\begin{lstlisting}[language=Kotlin, caption={Pure-Kotlin Keccak-f[1600] Permutation Round.}]
+private fun keccakF1600(state: LongArray) {
+    for (round in 0 until 24) {
+        // Theta step
+        val c = LongArray(5)
+        for (x in 0 until 5) {
+            c[x] = state[x] xor state[x + 5] xor state[x + 10] xor state[x + 15] xor state[x + 20]
+        }
+        for (x in 0 until 5) {
+            val d = c[(x + 4) % 5] xor java.lang.Long.rotateLeft(c[(x + 1) % 5], 1)
+            for (y in 0 until 5) {
+                state[x + 5 * y] = state[x + 5 * y] xor d
+            }
+        }
+
+        // Rho and Pi steps
+        val b = LongArray(25)
+        for (x in 0 until 5) {
+            for (y in 0 until 5) {
+                b[y + 5 * ((2 * x + 3 * y) % 5)] = 
+                    java.lang.Long.rotateLeft(state[x + 5 * y], KECCAK_ROTATION_CONSTANTS[x][y])
+            }
+        }
+
+        // Chi step
+        for (x in 0 until 5) {
+            for (y in 0 until 5) {
+                state[x + 5 * y] = b[x + 5 * y] xor (b[(x + 1) % 5 + 5 * y].inv() and b[(x + 2) % 5 + 5 * y])
+            }
+        }
+
+        // Iota step
+        state[0] = state[0] xor KECCAK_ROUND_CONSTANTS[round]
+    }
+}
+\end{lstlisting}
+
+\section{Asynchronous Bidirectional Packet Forwarding Loop}
+\label{sec:packet_forwarding_loop}
+
+Once the virtual interface is established, \texttt{QuantumSafeVpnService} spawns two asynchronous coroutine workers running on \texttt{Dispatchers.IO}:
+
+\begin{lstlisting}[language=Kotlin, caption={Uplink Packet Processing Worker Coroutine.}]
+private fun CoroutineScope.launchUplinkWorker(
+    pfd: ParcelFileDescriptor,
+    socket: Socket,
+    pqcEngine: PqcEngine
+) = launch(Dispatchers.IO) {
+    val inputStream = FileInputStream(pfd.fileDescriptor)
+    val outputStream = DataOutputStream(socket.getOutputStream())
+    val packetBuffer = ByteArray(32767)
+
+    try {
+        while (isActive && isRunning) {
+            val bytesRead = inputStream.read(packetBuffer)
+            if (bytesRead > 0) {
+                val rawIpPacket = packetBuffer.copyOf(bytesRead)
+                val seq = sendSequenceCounter.incrementAndGet()
+
+                val encryptedFrame = pqcEngine.encryptPacket(rawIpPacket, seq)
+
+                // Write framed packet: [4B Length] + [Encrypted Data]
+                synchronized(outputStream) {
+                    outputStream.writeInt(encryptedFrame.size)
+                    outputStream.write(encryptedFrame)
+                    outputStream.flush()
+                }
+
+                // Update Telemetry
+                totalBytesSent.addAndGet(encryptedFrame.size.toLong())
+            }
+        }
+    } catch (e: Exception) {
+        if (isRunning) handleTunnelError("Uplink read failure: ${e.message}")
+    }
+}
+\end{lstlisting}
+
+\section{Python Linux Gateway Daemon Implementation}
+\label{sec:python_gateway_impl}
+
+On the server side, \texttt{vpn/tunnel\_server.py} manages incoming client connections using Python's \texttt{threading} and \texttt{socket} modules:
+
+\subsection{Multi-Client IP Allocation and Dispatch}
+When a client connects, the server performs the handshake, allocates a virtual IP from \texttt{ip\_pool.py}, and spawns a dedicated client handler:
+\begin{lstlisting}[language=Python, caption={Python Server Multi-Client Handshake and Registration.}]
+def handle_client_connection(tun, conn, addr):
+    try:
+        session_key, assigned_ip = perform_handshake(conn, addr)
+        session_router.register_client(assigned_ip, conn, session_key)
+        print(f"[+] Client {addr} active at virtual IP {assigned_ip}")
+
+        last_seq = 0
+        while True:
+            encrypted_frame = recv_frame(conn)
+            plaintext = decrypt(session_key, encrypted_frame)
+
+            # Extract 64-bit sequence counter
+            seq = struct.unpack("!Q", plaintext[:8])[0]
+            if seq <= last_seq:
+                print(f"[!] Warning: Dropped replay packet (seq={seq}, last={last_seq})")
+                continue
+            last_seq = seq
+
+            raw_ip = plaintext[8:]
+            tun.write_packet(raw_ip) # Inject to Linux tun0
+
+    except Exception as e:
+        print(f"[-] Client {addr} disconnected: {e}")
+    finally:
+        session_router.unregister_client(assigned_ip)
+        ip_pool.release(assigned_ip)
+        conn.close()
+\end{lstlisting}
+
+\subsection{TUN Dispatcher Thread}
+A dedicated singleton background thread continuously reads return packets from \texttt{tun0}, parses the destination IP from the IPv4 header, and dispatches the packet to the appropriate client socket:
+\begin{lstlisting}[language=Python, caption={TUN Dispatcher Loop in tunnel\_server.py.}]
+def tun_dispatcher_loop(tun):
+    while True:
+        packet = tun.read_packet()
+        if not packet:
+            continue
+        dest_ip = SessionRouter.extract_dest_ip(packet)
+        client_info = session_router.get_client(dest_ip)
+
+        if client_info:
+            sock = client_info["socket"]
+            key = client_info["session_key"]
+            client_info["send_seq"] += 1
+            seq_packet = struct.pack("!Q", client_info["send_seq"]) + packet
+            encrypted = encrypt(key, seq_packet)
+            send_frame(sock, encrypted)
+\end{lstlisting}
+
+\section{Build and Packaging Process}
+\label{sec:build_packaging_process}
+
+The Android mobile client is compiled using Gradle:
+\begin{lstlisting}[language=bash, caption={APK Compilation and Packaging Commands.}]
+# Clean and assemble debug APK
+./gradlew assembleDebug
+
+# Assemble release APK
+./gradlew assembleRelease
+
+# Align and sign release APK
+zipalign -v -p 4 app-release-unsigned.apk app-release-aligned.apk
+apksigner sign --ks release.keystore --ks-key-alias quantumsafe \
+    --out QuantumSafe-VPN-release.apk app-release-aligned.apk
+\end{lstlisting}
+
+The resulting production artifacts reside in \texttt{dist/}:
+\begin{itemize}
+    \item \texttt{QuantumSafe-VPN-debug.apk} ($19.0$\,MB): Includes debugging symbols and logging.
+    \item \texttt{QuantumSafe-VPN-release.apk} ($14.1$\,MB): Optimized with R8 code shrinking and resource minification.
+\end{itemize}
+SHA-256 verification hashes are generated and validated in \texttt{dist/SHA256SUMS.txt}.

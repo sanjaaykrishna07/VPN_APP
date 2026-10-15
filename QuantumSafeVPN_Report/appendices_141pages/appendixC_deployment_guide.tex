@@ -1,0 +1,115 @@
+% ============================================================
+%  APPENDIX C: PRODUCTION BUILD & DEPLOYMENT GUIDE
+% ============================================================
+
+\chapter{PRODUCTION BUILD AND DEPLOYMENT GUIDE}
+\label{app:deployment_guide}
+
+This appendix provides a step-by-step production runbook for deploying the QuantumSafe VPN Linux Gateway and building/installing the Android client application from source.
+
+\section{Linux Gateway Server Installation}
+
+\subsection{Systemd Service Daemon Configuration}
+To ensure that the Python VPN server runs continuously as a resilient background daemon and restarts automatically upon server reboot, create the systemd unit file at \texttt{/etc/systemd/system/quantumsafe-vpn.service}:
+
+\begin{lstlisting}[language=bash, caption={Systemd Service Configuration (/etc/systemd/system/quantumsafe-vpn.service).}]
+[Unit]
+Description=QuantumSafe Post-Quantum VPN Server Daemon
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/quantumsafe-vpn
+Environment="PYTHONPATH=/opt/quantumsafe-vpn"
+Environment="VPN_SERVER_PORT=7000"
+ExecStartPre=/bin/bash /opt/quantumsafe-vpn/scripts/setup_network.sh
+ExecStart=/usr/bin/python3 /opt/quantumsafe-vpn/vpn/tunnel_server.py
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+
+# Security Sandboxing
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+\end{lstlisting}
+
+\subsection{Activating and Monitoring the Gateway Service}
+\begin{lstlisting}[language=bash, caption={Enabling and Inspecting the VPN Gateway Daemon.}]
+# Reload systemd manager configuration
+sudo systemctl daemon-reload
+
+# Enable daemon to launch automatically on boot
+sudo systemctl enable quantumsafe-vpn.service
+
+# Start the service immediately
+sudo systemctl start quantumsafe-vpn.service
+
+# Inspect real-time status and operational logs
+sudo systemctl status quantumsafe-vpn.service
+sudo journalctl -u quantumsafe-vpn.service -f
+\end{lstlisting}
+
+\subsection{Persistent iptables Configuration}
+To ensure that NAT masquerading rules survive server reboots:
+\begin{lstlisting}[language=bash, caption={Persisting Firewall and NAT Rules across Reboots.}]
+# Install iptables-persistent package
+sudo apt-get install -y iptables-persistent netfilter-persistent
+
+# Save current active IPv4 rules
+sudo netfilter-persistent save
+\end{lstlisting}
+
+\section{Android Client Build and Packaging Guide}
+
+\subsection{Prerequisites}
+\begin{itemize}
+    \item Java Development Kit: OpenJDK 17 or higher.
+    \item Android SDK: Command-line tools with Android SDK Platform 34 (Android 14).
+    \item Android Build Tools: Version 34.0.0.
+\end{itemize}
+
+\subsection{Building the Production Release APK}
+\begin{lstlisting}[language=bash, caption={Compiling and Aligning the Production Android APK.}]
+cd android/
+
+# Ensure gradlew has executable permissions
+chmod +x gradlew
+
+# Clean and assemble release bundle
+./gradlew clean assembleRelease
+
+# The unaligned release APK is located at:
+# app/build/outputs/apk/release/app-release-unsigned.apk
+\end{lstlisting}
+
+\subsection{Cryptographic Key Generation and APK Signing}
+\begin{lstlisting}[language=bash, caption={Generating Release Keystore and Signing the APK.}]
+# Generate 4096-bit RSA release signing key
+keytool -genkey -v -keystore release.keystore -alias quantumsafe \
+    -keyalg RSA -keysize 4096 -validity 10000
+
+# Align APK on 4-byte boundaries
+zipalign -v -p 4 app/build/outputs/apk/release/app-release-unsigned.apk \
+    ../dist/QuantumSafe-VPN-release-aligned.apk
+
+# Sign APK using apksigner with v2 and v3 signature schemes
+apksigner sign --ks release.keystore --ks-key-alias quantumsafe \
+    --out ../dist/QuantumSafe-VPN-release.apk \
+    ../dist/QuantumSafe-VPN-release-aligned.apk
+
+# Verify signature validity
+apksigner verify --verbose ../dist/QuantumSafe-VPN-release.apk
+\end{lstlisting}
+
+\subsection{Verifying SHA-256 Checksums}
+\begin{lstlisting}[language=bash, caption={Generating Distribution Verification Hashes.}]
+cd ../dist/
+sha256sum QuantumSafe-VPN-debug.apk QuantumSafe-VPN-release.apk > SHA256SUMS.txt
+cat SHA256SUMS.txt
+\end{lstlisting}

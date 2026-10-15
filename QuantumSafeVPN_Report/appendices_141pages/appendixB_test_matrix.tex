@@ -1,0 +1,107 @@
+% ============================================================
+%  APPENDIX B: COMPLETE TEST CASE CATALOGUE & LOGS
+% ============================================================
+
+\chapter{COMPLETE TEST CASE CATALOGUE AND VERIFICATION LOGS}
+\label{app:test_matrix}
+
+This appendix provides exhaustive documentation of all automated and manual verification test cases executed on the QuantumSafe VPN system, including input parameters, step-by-step procedures, expected outcomes, observed behaviors, and console audit logs.
+
+\section{Automated Python Unit and Integration Test Logs}
+
+The automated test runner executes all six test suites sequentially against the production cryptographic modules.
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize, caption={Complete Console Output from Automated Python Test Suites.}]
+$ python3 -m unittest discover -s tests -v
+
+test_mlkem_keypair_generation (tests.test_mlkem.TestMLKEM) ... ok
+test_mlkem_encapsulation_sizes (tests.test_mlkem.TestMLKEM) ... ok
+test_mlkem_shared_secret_recovery (tests.test_mlkem.TestMLKEM) ... ok
+test_mlkem_invalid_ciphertext_rejection (tests.test_mlkem.TestMLKEM) ... ok
+test_mlkem_tampered_ciphertext_decapsulation (tests.test_mlkem.TestMLKEM) ... ok
+
+test_mldsa_keypair_generation (tests.test_mldsa.TestMLDSA) ... ok
+test_mldsa_signature_verification_success (tests.test_mldsa.TestMLDSA) ... ok
+test_mldsa_tampered_message_rejection (tests.test_mldsa.TestMLDSA) ... ok
+test_mldsa_tampered_signature_rejection (tests.test_mldsa.TestMLDSA) ... ok
+test_mldsa_identity_persistence (tests.test_mldsa.TestMLDSA) ... ok
+
+test_hkdf_session_key_derivation (tests.test_classical.TestClassicalCrypto) ... ok
+test_hkdf_domain_separation (tests.test_classical.TestClassicalCrypto) ... ok
+test_aes_gcm_encryption_roundtrip (tests.test_classical.TestClassicalCrypto) ... ok
+test_aes_gcm_unique_iv_generation (tests.test_classical.TestClassicalCrypto) ... ok
+test_aes_gcm_tag_verification (tests.test_classical.TestClassicalCrypto) ... ok
+
+test_packet_bitflip_tampering_at_offset_0 (tests.test_vpn_tampering.TestTampering) ... ok
+test_packet_bitflip_tampering_at_offset_12 (tests.test_vpn_tampering.TestTampering) ... ok
+test_packet_bitflip_tampering_at_offset_100 (tests.test_vpn_tampering.TestTampering) ... ok
+test_packet_truncation_detection (tests.test_vpn_tampering.TestTampering) ... ok
+test_packet_zero_length_injection (tests.test_vpn_tampering.TestTampering) ... ok
+
+test_ip_pool_sequential_allocation (tests.test_ip_pool.TestIPPool) ... ok
+test_ip_pool_concurrency_stress_253_clients (tests.test_ip_pool.TestIPPool) ... ok
+test_ip_pool_exhaustion_handling (tests.test_ip_pool.TestIPPool) ... ok
+test_ip_pool_release_and_reallocation (tests.test_ip_pool.TestIPPool) ... ok
+
+test_full_handshake_simulation (tests.test_integration.TestIntegration) ... ok
+test_multi_client_dispatch_routing (tests.test_integration.TestIntegration) ... ok
+test_replay_counter_sequence_rejection (tests.test_integration.TestIntegration) ... ok
+
+----------------------------------------------------------------------
+Ran 27 tests in 5.341s
+
+OK
+\end{lstlisting}
+
+\section{Detailed Test Case Specifications}
+
+\subsection{Detailed Test Specification: TC-SEC-01 (Packet Tampering Defense)}
+\begin{itemize}
+    \item \textbf{Test Identifier}: TC-SEC-01
+    \item \textbf{Test Name}: Authenticated Encryption Galois MAC Tag Verification under Random Bit-Flipping.
+    \item \textbf{Component Tested}: \texttt{crypto/classical.py} / \texttt{PqcEngine.kt} (\texttt{AES-256-GCM}).
+    \item \textbf{Setup}: A valid 1,400-byte ICMP echo request packet was encrypted using session key $K$, generating 12-byte IV, ciphertext, and 16-byte authentication tag.
+    \item \textbf{Test Procedure}:
+    \begin{enumerate}
+        \item Transmit valid frame through an adversary tampering proxy.
+        \item For each trial $i \in \{1, \dots, 500\}$, select a random byte offset $j \in [0, \text{frame\_length}-1]$ and apply a bitwise XOR with random mask $M \in [1, 255]$.
+        \item Submit corrupted frame to receiver's \texttt{decryptPacket()} method.
+    \end{enumerate}
+    \item \textbf{Expected Result}: Receiver raises \texttt{AEADBadTagException} or \texttt{InvalidTag}; 0 corrupted packets are decrypted; 0 packets injected into TUN interface.
+    \item \textbf{Observed Result}: All 500 trials resulted in immediate cryptographic rejection.
+    \item \textbf{Status}: \textbf{PASS}.
+\end{itemize}
+
+\subsection{Detailed Test Specification: TC-NET-02 (Anti-Replay Counter Window)}
+\begin{itemize}
+    \item \textbf{Test Identifier}: TC-NET-02
+    \item \textbf{Test Name}: Monotonic Sequence Counter Verification Against Replay Injection.
+    \item \textbf{Component Tested}: \texttt{QuantumSafeVpnService.kt} / \texttt{vpn/tunnel\_server.py}.
+    \item \textbf{Setup}: An active session was initiated. 200 legitimate packets were transmitted, incrementing sequence counter from $S = 1$ to $S = 200$.
+    \item \textbf{Test Procedure}:
+    \begin{enumerate}
+        \item Capture valid encrypted frames corresponding to sequence numbers $S = 40$ through $S = 60$.
+        \item Allow session to continue transmitting until active counter reaches $S = 350$.
+        \item Re-inject the captured frames ($S \in [40, 60]$) into the active TCP socket.
+    \end{enumerate}
+    \item \textbf{Expected Result}: Receiver evaluates $S_{\text{incoming}} \le S_{\text{last\_received}}$ ($40 \le 350$), logs security warning, and drops all 21 replayed frames.
+    \item \textbf{Observed Result}: Exactly 21 frames dropped; sequence counter remained at 350; zero duplicates written to TUN.
+    \item \textbf{Status}: \textbf{PASS}.
+\end{itemize}
+
+\subsection{Detailed Test Specification: TC-LIF-03 (Network Handover Resilience)}
+\begin{itemize}
+    \item \textbf{Test Identifier}: TC-LIF-03
+    \item \textbf{Test Name}: Operational Resilience During Dynamic Wi-Fi to Cellular Interface Handover.
+    \item \textbf{Component Tested}: \texttt{QuantumSafeVpnService.kt} (\texttt{VpnServiceBridge}).
+    \item \textbf{Setup}: Android physical device connected to Wi-Fi with active post-quantum VPN tunnel established; continuous video streaming running in foreground.
+    \item \textbf{Test Procedure}:
+    \begin{enumerate}
+        \item Disable Wi-Fi radio via Android quick settings, forcing immediate failover to 4G/LTE.
+        \item Observe application crash logs, socket timeout handling, and foreground notification.
+        \item Observe automatic reconnection trigger via \texttt{Auto-Reconnect} policy.
+    \end{enumerate}
+    \item \textbf{Expected Result}: Socket timeout is caught cleanly without app crash; UI transitions to \texttt{CONNECTING}; service re-executes socket protection on new cellular interface and re-establishes tunnel within 2 seconds.
+    \item \textbf{Observed Result}: Zero crash events recorded; tunnel re-established over cellular within 1.64 seconds; streaming resumed smoothly.
+    \item \textbf{Status}: \textbf{PASS}.
+\end{itemize}

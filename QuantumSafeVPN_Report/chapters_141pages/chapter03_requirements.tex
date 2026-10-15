@@ -1,0 +1,437 @@
+% ============================================================
+%  CHAPTER 3: PROBLEM STATEMENT AND REQUIREMENTS ANALYSIS
+% ============================================================
+
+\chapter{PROBLEM STATEMENT AND REQUIREMENTS ANALYSIS}
+\label{chap:requirements}
+
+\section{Analysis of the Existing System}
+\label{sec:existing_system_analysis}
+
+The baseline system available prior to this project consisted of an academic research prototype authored in Python~3, comprising \texttt{vpn/tunnel\_client.py}, \texttt{vpn/tunnel\_server.py}, \texttt{pqc/mlkem.py}, and \texttt{pqc/mldsa.py}. While mathematically capable of performing laboratory-grade lattice-based operations and basic packet encapsulation, the existing system was architected strictly as a desktop-oriented command-line utility for Linux workstations.
+
+In the existing desktop implementation:
+\begin{enumerate}
+    \item \textbf{TUN Driver Dependency}: The client relies on direct instantiation of Linux \texttt{/dev/net/tun} character device nodes via Python's \texttt{os.open()} and \texttt{fcntl.ioctl()} system calls with the \texttt{TUNSETIFF} flag.
+    \item \textbf{Superuser Privileges}: Because manipulating \texttt{/dev/net/tun} and the Linux kernel routing table requires root capabilities (\texttt{CAP\_NET\_ADMIN}), the script must be launched using \texttt{sudo python3 tunnel\_client.py}.
+    \item \textbf{Manual Policy Routing}: To prevent recursive routing loops, the desktop script manually invokes external shell commands (\texttt{ip rule add}, \texttt{ip route add table 100}) to isolate the transport socket from the tunnel interface.
+    \item \textbf{Lack of User Interface}: The client presents only raw terminal console logs, lacking any visual connection state representation, diagnostic charts, or interactive server selection controls.
+\end{enumerate}
+
+\section{Limitations of the Existing Implementation}
+\label{sec:existing_system_limitations}
+
+A rigorous technical audit of the baseline desktop codebase identified critical architectural, usability, and operational deficiencies that entirely prevent its deployment in mobile environments:
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Technical Deficiencies of the Legacy Python Desktop VPN.}
+  \label{tab:legacy_system_deficiencies}
+  \begin{tabular}{@{}P{3.2cm}P{5.0cm}P{6.0cm}@{}}
+    \toprule
+    \textbf{Deficiency Area} & \textbf{Observed Legacy Behavior} & \textbf{Operational Impact} \\
+    \midrule
+    \textbf{Mobile Incompatibility} & Relies on Linux POSIX \texttt{ioctl} calls on \texttt{/dev/net/tun} & Fails completely on Android; non-root apps cannot access device nodes \\
+    \addlinespace
+    \textbf{Root Privilege Mandate} & Requires \texttt{sudo} to alter network tables & Incompatible with standard commercial Android devices \\
+    \addlinespace
+    \textbf{Routing Loop Vulnerability} & Shell-based routing table manipulation & If shell script fails, immediate recursive routing loop crashes client OS \\
+    \addlinespace
+    \textbf{Hash Desynchronization} & Uses CPython \texttt{hashlib.sha3\_256} & Third-party Java/Android ports default to SHA-2, causing handshake decapsulation failure \\
+    \addlinespace
+    \textbf{No Lifecycle Management} & Unhandled TCP socket termination leaves orphaned TUN devices & Incomplete resource cleanup leaks memory and blocks subsequent tunnels \\
+    \addlinespace
+    \textbf{Zero Key Security} & Hardcoded test endpoints; static identity keys in working directory & High vulnerability to key theft on shared filesystems \\
+    \addlinespace
+    \textbf{User Experience Deficit} & Command-line terminal only & Completely unusable by non-technical end users \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{The Proposed Android Application Architecture}
+\label{sec:proposed_android_app}
+
+To overcome every limitation identified in Table~\ref{tab:legacy_system_deficiencies}, this project re-engineers the client from the ground up as a native Android application. The proposed system replaces Python CLI scripts with a modern, reactive Kotlin codebase built upon Google's Jetpack Compose framework, Android Material 3 design tokens, and the official \texttt{android.net.VpnService} API.
+
+Key pillars of the proposed mobile system include:
+\begin{itemize}
+    \item \textbf{Zero Root Requirement}: Operates entirely within Android's standard security sandbox, obtaining network interception capabilities through the user-consented \texttt{VpnService} dialog.
+    \item \textbf{Kernel-Enforced Socket Protection}: Leverages Android's native \texttt{protect(socket)} API, guaranteeing that VPN transport traffic completely bypasses the tunnel without brittle shell script modifications.
+    \item \textbf{Pure-Kotlin PQC Engine}: Eliminates bloated external C-libraries and JNI overhead by implementing ML-KEM-1024, ML-DSA-65, and Keccak SHA3-256 in clean, highly optimized pure Kotlin.
+    \item \textbf{Hardware-Backed Keystore Security}: Caches user configuration and server identity fingerprints within Android Keystore-backed \texttt{EncryptedSharedPreferences}.
+    \item \textbf{Minimalist White UI Design System}: Delivers an uncluttered, high-contrast user interface engineered for clarity, rapid situational awareness, and low cognitive overhead.
+\end{itemize}
+
+\section{Detailed Functional Requirements Specification}
+\label{sec:detailed_functional_requirements}
+
+Table~\ref{tab:functional_requirements_detail} formalizes the complete Functional Requirements Specification (FRS) for the QuantumSafe VPN system.
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Detailed Functional Requirements Specification (FRS).}
+  \label{tab:functional_requirements_detail}
+  \begin{tabular}{@{}P{1.6cm}P{3.4cm}P{4.2cm}P{2.6cm}P{1.8cm}@{}}
+    \toprule
+    \textbf{Req. ID} & \textbf{Requirement Title} & \textbf{Functional Description} & \textbf{Input / Trigger} & \textbf{Priority} \\
+    \midrule
+    \textbf{FR-01} & VPN Permission Request & Invoke \texttt{VpnService.prepare()} to obtain OS consent dialog & User taps Connect button & High (Core) \\
+    \addlinespace
+    \textbf{FR-02} & Socket Protection & Execute \texttt{protect(socket)} on TCP transport socket to bypass VPN routing & Prior to establishing TCP connection & High (Core) \\
+    \addlinespace
+    \textbf{FR-03} & PQC Handshake Stage 1 & Receive and validate 1,952-byte ML-DSA-65 public key from server & Server Hello frame over TCP & High (Core) \\
+    \addlinespace
+    \textbf{FR-04} & PQC Handshake Stage 2 & Generate ML-KEM-1024 keypair and transmit 1,568-byte public key to server & Stage 1 completion & High (Core) \\
+    \addlinespace
+    \textbf{FR-05} & PQC Handshake Stage 3 & Receive 1,568-byte ciphertext and 3,309-byte signature; decapsulate shared secret & Server Response frame & High (Core) \\
+    \addlinespace
+    \textbf{FR-06} & Handshake Verification & Verify ML-DSA-65 signature over full transcript \texttt{"QuantumSafeVPN-v1" + pk + c} & Received signature frame & High (Core) \\
+    \addlinespace
+    \textbf{FR-07} & Session Key Derivation & Derive 256-bit AES key via HKDF-SHA256 from shared secret & Successful decapsulation & High (Core) \\
+    \addlinespace
+    \textbf{FR-08} & Dynamic IP Configuration & Parse configuration JSON; configure virtual TUN IP, subnet, MTU, and DNS & Stage 4 config frame & High (Core) \\
+    \addlinespace
+    \textbf{FR-09} & Outbound Encapsulation & Read raw IPv4 from TUN; append 64-bit seq; encrypt with AES-256-GCM; send frame & Outbound app packet & High (Core) \\
+    \addlinespace
+    \textbf{FR-10} & Inbound Decapsulation & Read frame; verify 16-byte GCM tag; verify sequence counter; write packet to TUN & Inbound server frame & High (Core) \\
+    \addlinespace
+    \textbf{FR-11} & Anti-Replay Filtering & Drop frames with sequence counter $\le$ last received sequence counter & Inbound packet header & High (Core) \\
+    \addlinespace
+    \textbf{FR-12} & Server Configuration & Allow user to update server host/IP, port, MTU, and socket timeout & Settings UI form & Medium \\
+    \addlinespace
+    \textbf{FR-13} & Real-Time Telemetry & Calculate and display live session timer, bytes sent/received, and packet counts & Active connection state & Medium \\
+    \addlinespace
+    \textbf{FR-14} & Graceful Disconnection & Flush I/O buffers, send disconnect frame, close PFD, release foreground service & User taps Disconnect & High (Core) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Detailed Non-Functional Requirements Specification}
+\label{sec:detailed_nfr}
+
+The system must satisfy stringent non-functional criteria to ensure security, usability, and production stability across mobile environments:
+
+\begin{enumerate}[label=\textbf{NFR-\arabic*.}]
+    \item \textbf{Security Rigor}:
+    \begin{itemize}
+        \item Digital signatures and key encapsulation must achieve NIST PQC Category~5 quantum security equivalence.
+        \item Data packets must employ 256-bit authenticated encryption (AES-256-GCM) with random 12-byte initialization vectors generated via \texttt{SecureRandom}.
+        \item No cryptographic keys, master secrets, or decrypted payloads may be persisted to unencrypted disk caches or logged to Android Logcat.
+    \end{itemize}
+    \item \textbf{Performance and Throughput}:
+    \begin{itemize}
+        \item Handshake latency must not exceed 50\,ms on local networks and 250\,ms on high-latency mobile cellular networks.
+        \item Tunnel packet processing latency overhead must remain under 3\,ms per average 1500-byte frame on mid-range Android mobile chipsets (e.g., Qualcomm Snapdragon 7 series or equivalent).
+        \item Memory utilization of the Android background service process must remain below 45\,MB during sustained multi-megabyte transfers.
+    \end{itemize}
+    \item \textbf{Reliability and Resilience}:
+    \begin{itemize}
+        \item The application must survive abrupt network interface transitions (e.g., Wi-Fi disconnecting and cellular activating) without application crash or unhandled null-pointer exceptions.
+        \item If the server daemon terminates unexpectedly, the client must safely release the TUN file descriptor and transition the UI state to \texttt{DISCONNECTED} with a descriptive user alert.
+    \end{itemize}
+    \item \textbf{User Interface Ergonomics}:
+    \begin{itemize}
+        \item The UI must adhere strictly to a clean, minimal white design aesthetic (\texttt{\#FFFFFF} surface, \texttt{\#1A1D20} typography, subtle \texttt{\#1971C2} blue accents).
+        \item Contrast ratios between text and background surfaces must exceed 7:1, satisfying WCAG 2.1 AAA accessibility standards.
+    \end{itemize}
+\end{enumerate}
+
+\section{Hardware and Software Operational Requirements}
+\label{sec:hardware_software_requirements}
+
+\subsection{Client Environment (Android Mobile Endpoint)}
+\begin{itemize}
+    \item \textbf{Hardware Requirements}:
+    \begin{itemize}
+        \item Processor: 64-bit ARMv8-A (arm64-v8a) or x86\_64 multi-core processor.
+        \item RAM: Minimum 2\,GB system memory (4\,GB recommended).
+        \item Storage: 50\,MB available internal flash storage for application installation.
+        \item Network: 802.11 a/b/g/n/ac/ax Wi-Fi adapter or 4G/5G cellular modem.
+    \end{itemize}
+    \item \textbf{Software Requirements}:
+    \begin{itemize}
+        \item Operating System: Android 8.0 (Oreo, API Level 26) through Android 14 (API Level 34).
+        \item Target SDK: 34 (Android 14) | Compile SDK: 34.
+        \item Runtime: Android Runtime (ART) with Java 17 bytecode support.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Server Environment (Linux Gateway Gateway)}
+\begin{itemize}
+    \item \textbf{Hardware Requirements}:
+    \begin{itemize}
+        \item Processor: x86\_64 multi-core CPU (Intel Core i5/Xeon or AMD Ryzen/EPYC).
+        \item RAM: Minimum 2\,GB system RAM (4\,GB recommended for multi-client routing).
+        \item Storage: 10\,GB available disk space.
+        \item Network Interface: Gigabit Ethernet adapter (eth0) with public WAN access.
+    \end{itemize}
+    \item \textbf{Software Requirements}:
+    \begin{itemize}
+        \item Operating System: Kali Linux 2024.x, Ubuntu Server 22.04 LTS, or Debian 12.
+        \item Kernel: Linux Kernel 5.15+ with \texttt{CONFIG\_NET\_IP\_TUN=y}.
+        \item Runtime: Python 3.10, 3.11, or 3.12.
+        \item Utilities: \texttt{iptables}, \texttt{sysctl}, \texttt{iproute2}, \texttt{tcpdump}, \texttt{wireshark}.
+    \end{itemize}
+\end{itemize}
+
+\section{System Use-Case Modeling}
+\label{sec:use_case_modeling}
+
+The operational capabilities exposed to the user and interacting external actors are depicted in the Use Case Diagram in Figure~\ref{fig:tikz_use_case}. The primary actors comprise the \textbf{Mobile User}, the \textbf{Android OS Subsystem}, and the \textbf{Remote Linux VPN Gateway}.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+    scale=0.85, every node/.style={transform shape},
+    actor/.style={draw, thick, fill=white, circle, minimum size=0.8cm},
+    actorlabel/.style={font=\bfseries\small, text=darkcharcoal, align=center},
+    usecase/.style={draw=vpnblue, fill=codebg, thick, ellipse, minimum width=4.2cm, minimum height=1.0cm, align=center, font=\footnotesize\bfseries, text=darkcharcoal},
+    systembox/.style={draw=mutedgrey, dashed, thick, rounded corners=8pt, fill=white}
+  ]
+    % System boundary
+    \draw[systembox] (0, -0.5) rectangle (10.5, 9.5);
+    \node[anchor=north west, font=\bfseries\normalsize, text=vpnblue] at (0.2, 9.3) {QuantumSafe VPN Android System};
+
+    % Use cases inside
+    \node[usecase] (uc1) at (5.25, 8.5) {UC-01: Initiate VPN Connection};
+    \node[usecase] (uc2) at (5.25, 7.2) {UC-02: Grant OS VpnService Consent};
+    \node[usecase] (uc3) at (5.25, 5.9) {UC-03: Execute PQC Handshake};
+    \node[usecase] (uc4) at (5.25, 4.6) {UC-04: Tunnel Encrypted IP Packets};
+    \node[usecase] (uc5) at (5.25, 3.3) {UC-05: Monitor Live Telemetry};
+    \node[usecase] (uc6) at (5.25, 2.0) {UC-06: Configure Server Settings};
+    \node[usecase] (uc7) at (5.25, 0.7) {UC-07: Terminate VPN Connection};
+
+    % Left Actor: Mobile User
+    \node[circle, draw, thick, minimum size=0.6cm] (userhead) at (-2.2, 5.0) {};
+    \draw[thick] (userhead.south) -- ++(0, -0.6) coordinate (userbody);
+    \draw[thick] (userbody) -- ++(-0.4, -0.6);
+    \draw[thick] (userbody) -- ++(0.4, -0.6);
+    \draw[thick] ($(userhead.south)!0.4!(userbody)$) -- ++(-0.5, -0.3);
+    \draw[thick] ($(userhead.south)!0.4!(userbody)$) -- ++(0.5, -0.3);
+    \node[actorlabel] at (-2.2, 3.3) {Mobile User};
+
+    % Right Actor: Linux VPN Server
+    \node[draw=darkcharcoal, thick, fill=codebg, rounded corners=3pt, minimum width=1.5cm, minimum height=1.0cm] (serverbox) at (12.8, 5.0) {\textbf{VPN Gateway}};
+    \node[actorlabel] at (12.8, 4.0) {Linux Daemon};
+
+    % Associations
+    \draw[thick, ->] (-1.4, 5.3) -- (uc1.west);
+    \draw[thick, ->] (-1.4, 4.8) -- (uc5.west);
+    \draw[thick, ->] (-1.4, 4.3) -- (uc6.west);
+    \draw[thick, ->] (-1.4, 3.8) -- (uc7.west);
+
+    \draw[dashed, thick, ->] (uc1) -- node[right, font=\tiny\itshape] {<<includes>>} (uc2);
+    \draw[dashed, thick, ->] (uc1) -- node[right, font=\tiny\itshape] {<<includes>>} (uc3);
+    \draw[dashed, thick, ->] (uc3) -- node[right, font=\tiny\itshape] {<<proceeds to>>} (uc4);
+
+    \draw[thick, <->] (serverbox.west) -- (uc3.east);
+    \draw[thick, <->] (serverbox.west) -- (uc4.east);
+  \end{tikzpicture}
+  \caption{UML Use Case Diagram for the QuantumSafe VPN Android System.}
+  \label{fig:tikz_use_case}
+\end{figure}
+
+\section{Detailed Use-Case Descriptions}
+\label{sec:detailed_use_cases}
+
+This section provides rigorous specifications for the primary operational use cases:
+
+\subsection{Use Case UC-01: Initiate VPN Connection}
+\begin{itemize}
+    \item \textbf{Use Case ID}: UC-01
+    \item \textbf{Primary Actor}: Mobile User
+    \item \textbf{Preconditions}: The Android client application is installed and running in the foreground; device maintains active Wi-Fi or cellular connectivity; server endpoint is populated.
+    \item \textbf{Trigger}: User taps the primary ``Connect'' button on the Home screen.
+    \item \textbf{Main Success Scenario}:
+    \begin{enumerate}
+        \item The application verifies that the target server hostname and port are valid.
+        \item The application checks if Android \texttt{VpnService} permission has been granted; if not, triggers UC-02.
+        \item The application transitions the UI state badge to \texttt{CONNECTING}.
+        \item The background \texttt{QuantumSafeVpnService} is started as an Android Foreground Service with an ongoing notification.
+        \item The service executes the 4-stage post-quantum handshake (UC-03).
+        \item Upon handshake success, the service establishes the virtual TUN interface and begins packet tunneling (UC-04).
+        \item The UI transitions state badge to \texttt{CONNECTED}, initiates session timer, and displays assigned virtual IP.
+    \end{enumerate}
+    \item \textbf{Alternative Flows}:
+    \begin{itemize}
+        \item \textit{AF-1 (Network Unreachable)}: If TCP socket connection times out after 10 seconds, the service aborts, releases resources, updates UI to \texttt{ERROR}, and displays alert: ``Server unreachable. Please verify IP and port.''
+        \item \textit{AF-2 (Permission Denied)}: If user rejects OS dialog in UC-02, state resets to \texttt{DISCONNECTED}.
+    \end{itemize}
+    \item \textbf{Postconditions}: Full-tunnel encrypted VPN established; all device traffic routed to gateway.
+\end{itemize}
+
+\subsection{Use Case UC-03: Execute Post-Quantum Handshake}
+\begin{itemize}
+    \item \textbf{Use Case ID}: UC-03
+    \item \textbf{Primary Actors}: Android Client (\texttt{PqcEngine}), Linux VPN Gateway (\texttt{tunnel\_server.py})
+    \item \textbf{Preconditions}: TCP transport socket connected to server on port 7000 and protected via \texttt{protect()}.
+    \item \textbf{Trigger}: Transport connection establishment.
+    \item \textbf{Main Success Scenario}:
+    \begin{enumerate}
+        \item Server transmits 1,952-byte ML-DSA-65 public key (Stage 1).
+        \item Client verifies server public key against pinned identity hash; generates ephemeral ML-KEM-1024 keypair $(pk_{\text{client}}, sk_{\text{client}})$.
+        \item Client sends 1,568-byte $pk_{\text{client}}$ to server (Stage 2).
+        \item Server encapsulates shared secret under $pk_{\text{client}}$, generating 1,568-byte ciphertext $c$ and shared secret $SS$.
+        \item Server signs transcript \texttt{"QuantumSafeVPN-v1" + $pk_{\text{client}}$ + $c$} using its ML-DSA-65 private key, generating 3,309-byte signature $\sigma$.
+        \item Server sends $c$, $\sigma$, and configuration JSON block to client (Stage 3).
+        \item Client verifies signature $\sigma$ using server's ML-DSA-65 public key.
+        \item Client decapsulates $c$ using $sk_{\text{client}}$, recovering identical shared secret $SS$.
+        \item Both endpoints derive 256-bit AES session key: $K = \text{HKDF-SHA256}(SS, \text{salt}=0^{32}, \text{info}=\text{"QuantumSafeVPN-Session-Key"})$.
+        \item Client extracts assigned IP (\texttt{10.8.0.x}), DNS (\texttt{1.1.1.1}), and MTU (\texttt{1400}).
+    \end{enumerate}
+    \item \textbf{Alternative Flow (Signature Verification Failure)}: If $\sigma$ does not verify, client drops socket immediately, logs cryptographic tampering event, and halts connection attempt.
+    \item \textbf{Postconditions}: Both endpoints share identical 256-bit symmetric session key with verified server identity.
+\end{itemize}
+
+\subsection{Use Case UC-04: Tunnel Encrypted IP Packets}
+\begin{itemize}
+    \item \textbf{Use Case ID}: UC-04
+    \item \textbf{Primary Actors}: Android OS Kernel, Client Worker Coroutine, Server Routing Daemon
+    \item \textbf{Preconditions}: Virtual TUN interface established; symmetric session key derived.
+    \item \textbf{Main Success Scenario}:
+    \begin{enumerate}
+        \item Client reads raw IPv4 packet from TUN \texttt{FileInputStream}.
+        \item Client prepends 64-bit monotonic sequence counter $S_{\text{client}}$.
+        \item Client generates 12-byte random initialization vector $IV$.
+        \item Client encrypts payload using AES-256-GCM, producing ciphertext and 16-byte authentication tag.
+        \item Client frames packet with 4-byte length header and writes to protected TCP socket.
+        \item Server receives frame, verifies 16-byte tag, verifies monotonic sequence number, and decrypts payload.
+        \item Server writes decrypted IPv4 packet to \texttt{tun0}; kernel executes NAT masquerade to WAN.
+        \item Return packets from WAN are captured by server \texttt{tun0}, encrypted under client's session key, and forwarded back to client TCP socket.
+        \item Client decrypts return frame, verifies tag, and writes plaintext IP packet into TUN \texttt{FileOutputStream}.
+    \end{enumerate}
+    \item \textbf{Postconditions}: Transparent, bidirectional, authenticated end-to-end IP connectivity maintained.
+\end{itemize}
+
+\section{Agile User Stories and Acceptance Criteria}
+\label{sec:user_stories}
+
+To align engineering tasks with user-centric outcomes, Table~\ref{tab:user_stories_detail} articulates eight Agile User Stories and their concrete acceptance criteria.
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Agile User Stories and Concrete Acceptance Criteria.}
+  \label{tab:user_stories_detail}
+  \begin{tabular}{@{}P{1.8cm}P{5.0cm}P{7.2cm}@{}}
+    \toprule
+    \textbf{Story ID} & \textbf{User Story} & \textbf{Acceptance Criteria} \\
+    \midrule
+    \textbf{US-01} & As a security-conscious mobile user, I want to connect to a VPN with one tap so that my mobile traffic is immediately encrypted. & 1. Connect button initiates service immediately.\\ & & 2. State transitions to CONNECTED within 3 seconds.\\ & & 3. Session timer and assigned IP display clearly. \\
+    \addlinespace
+    \textbf{US-02} & As a remote professional, I want protection against quantum harvesting so that my data cannot be decrypted decades later. & 1. Connection negotiates ML-KEM-1024 and ML-DSA-65.\\ & & 2. Zero classical key-exchange algorithms are used.\\ & & 3. Security screen confirms active PQC ciphers. \\
+    \addlinespace
+    \textbf{US-03} & As an enterprise administrator, I want to configure custom VPN server endpoints so that clients connect to our dedicated gateway. & 1. User can edit Host IP, Port, and MTU.\\ & & 2. Input validation flags invalid ports or formats.\\ & & 3. Values persist across app restarts in Android Keystore. \\
+    \addlinespace
+    \textbf{US-04} & As a mobile user, I want the VPN not to drain my phone's battery so that I can keep it enabled all day. & 1. Average battery drain $\le 2.0$\% per hour.\\ & & 2. Background memory usage remains below 45\,MB.\\ & & 3. Asynchronous coroutines prevent CPU pegging. \\
+    \addlinespace
+    \textbf{US-05} & As a network auditor, I want transparent cryptographic telemetry so that I can verify cipher suites and key lengths. & 1. Security Details screen displays wire parameters.\\ & & 2. Discloses ML-KEM-1024, ML-DSA-65, AES-256-GCM.\\ & & 3. Discloses pure-Kotlin lattice simulation status. \\
+    \addlinespace
+    \textbf{US-06} & As a privacy advocate, I want all DNS queries routed through the VPN so that my local ISP cannot log visited domains. & 1. VpnService configures DNS to 1.1.1.1 and 8.8.8.8.\\ & & 2. Third-party DNS leak tests reveal 0 local ISP leaks.\\ & & 3. IPv6 is suppressed to prevent split-tunnel leaks. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Feasibility Analysis}
+\label{sec:feasibility_analysis}
+
+A formal multi-dimensional feasibility study was conducted prior to implementation:
+
+\subsection{Technical Feasibility}
+The Android platform natively supports Layer~3 packet tunneling via \texttt{VpnService} without requiring device rooting or kernel modifications. Kotlin 1.9 supports high-performance coroutines and bitwise binary operations required to implement lattice polynomial transformations and Keccak permutations. Preliminary benchmarking confirmed that executing ML-KEM-1024 keypair generation and decapsulation on standard ARM64 mobile processors takes under 15\,ms, demonstrating that post-quantum mobile cryptography is fully technically feasible.
+
+\subsection{Operational Feasibility}
+The system requires zero user retraining. The minimal white graphical interface abstracts complex cryptographic operations behind a single intuitive toggle switch. On the server side, the lightweight Python daemon runs on any standard Linux distribution with standard \texttt{iptables} support, making deployment straightforward for network administrators.
+
+\subsection{Economic and Schedule Feasibility}
+The project relies exclusively on open-source technologies, standards, and toolchains (Kotlin, Android SDK, Gradle, Python 3, Linux, Git), incurring zero software licensing expenditures. Development was organized into structured phases (architecture, cryptographic engine, UI, integration, testing, documentation) and completed within the academic semester timeframe.
+
+\section{Threat Assumptions and Trust Boundaries}
+\label{sec:threat_assumptions_trust_boundaries}
+
+\subsection{Threat Assumptions}
+\begin{enumerate}
+    \item \textbf{Adversary Model}: The adversary controls the intermediate physical and wireless transport network (e.g., a rogue Wi-Fi access point, compromised ISP router, or malicious cellular base station). The adversary possesses full capabilities to eavesdrop on, intercept, replay, inject, and drop arbitrary network frames.
+    \item \textbf{Quantum Capabilities}: The adversary possesses high-capacity bulk archiving infrastructure today and will possess a Cryptographically Relevant Quantum Computer (CRQC) capable of executing Shor's algorithm in the future.
+    \item \textbf{Endpoint Integrity}: The local Android mobile device and the remote Linux VPN server are assumed to have trusted operating environments free from rootkits, kernel compromises, or memory-scraping malware.
+\end{enumerate}
+
+\subsection{Trust Boundaries}
+The system establishes three distinct trust boundaries (depicted in Figure~\ref{fig:tikz_trust_boundaries}):
+\begin{itemize}
+    \item \textbf{Trust Boundary A (Android Sandbox)}: Delimits unprivileged Android applications from the QuantumSafe VPN service. Communication across this boundary is arbitrated strictly by the Android Linux kernel via the virtual TUN interface.
+    \item \textbf{Trust Boundary B (Public Network Perimeter)}: Delimits the mobile device from the untrusted intermediate network. All traffic traversing this boundary must be encapsulated in authenticated AES-256-GCM ciphertext frames.
+    \item \textbf{Trust Boundary C (Gateway DMZ)}: Delimits the Python VPN server from the upstream public Internet. Incoming frames must undergo tag verification and decapsulation before being passed to the Linux NAT forwarding engine.
+\end{itemize}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}[
+    scale=0.9, every node/.style={transform shape},
+    box/.style={draw=darkcharcoal, thick, rounded corners=4pt, fill=white, minimum width=3.2cm, minimum height=1.8cm, align=center, font=\small},
+    boundary/.style={draw=red!80!black, dashed, ultra thick}
+  ]
+    % Domains
+    \draw[fill=blue!5, rounded corners=6pt] (-4.5, -2.5) rectangle (-0.5, 2.5);
+    \node[anchor=north, font=\bfseries\small, text=vpnblue] at (-2.5, 2.3) {Trusted Client Device};
+
+    \draw[fill=gray!10, rounded corners=6pt] (0.5, -2.5) rectangle (4.5, 2.5);
+    \node[anchor=north, font=\bfseries\small, text=red!80!black] at (2.5, 2.3) {Untrusted Transit Network};
+
+    \draw[fill=blue!5, rounded corners=6pt] (5.5, -2.5) rectangle (9.5, 2.5);
+    \node[anchor=north, font=\bfseries\small, text=vpnblue] at (7.5, 2.3) {Trusted VPN Gateway};
+
+    % Elements inside Client
+    \node[box, minimum width=2.6cm, minimum height=0.9cm] (app) at (-2.5, 1.0) {Android Apps};
+    \node[box, minimum width=2.6cm, minimum height=0.9cm, fill=vpnblue!10] (vpnapp) at (-2.5, -1.0) {QuantumSafe\\VpnService};
+
+    % Elements inside Network
+    \node[draw=red!80!black, thick, fill=white, rounded corners=4pt, minimum width=2.8cm, minimum height=1.2cm, align=center] (eaves) at (2.5, 0) {Adversary:\\Eavesdrop / Replay /\\Quantum Archive};
+
+    % Elements inside Server
+    \node[box, minimum width=2.6cm, minimum height=0.9cm, fill=vpnblue!10] (server) at (7.5, -1.0) {Python Server\\Daemon (tun0)};
+    \node[box, minimum width=2.6cm, minimum height=0.9cm] (wan) at (7.5, 1.0) {iptables NAT\\Forwarding};
+
+    % Flows
+    \draw[thick, ->] (app) -- (vpnapp);
+    \draw[thick, <->] (vpnapp) -- node[above, font=\tiny\bfseries] {Encrypted TCP (7000)} (server);
+    \draw[thick, <->] (server) -- (wan);
+
+    % Boundaries
+    \draw[boundary] (0.0, -2.8) -- (0.0, 2.8) node[above, font=\bfseries\scriptsize, text=red!80!black] {Trust Boundary B};
+    \draw[boundary] (5.0, -2.8) -- (5.0, 2.8) node[above, font=\bfseries\scriptsize, text=red!80!black] {Trust Boundary C};
+  \end{tikzpicture}
+  \caption{Trust Boundaries and Threat Architecture for QuantumSafe VPN.}
+  \label{fig:tikz_trust_boundaries}
+\end{figure}
+
+\section{Requirement Traceability Matrix (RTM)}
+\label{sec:rtm}
+
+Table~\ref{tab:rtm_table} maps business objectives, functional requirements, architectural modules, and verification test cases into a comprehensive Requirement Traceability Matrix (RTM).
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Requirement Traceability Matrix (RTM).}
+  \label{tab:rtm_table}
+  \begin{tabular}{@{}P{1.8cm}P{1.8cm}P{3.4cm}P{3.6cm}P{2.6cm}@{}}
+    \toprule
+    \textbf{Objective} & \textbf{Req. ID} & \textbf{Functional Requirement} & \textbf{Architectural Module} & \textbf{Verification Test} \\
+    \midrule
+    \textbf{OBJ-1} & FR-01 & OS VpnService Consent & \texttt{QuantumSafeVpnService.kt} & TC-01 (Permission Test) \\
+    \textbf{OBJ-1} & FR-02 & Socket Bypassing (\texttt{protect}) & \texttt{QuantumSafeVpnService.kt} & TC-02 (Loop Avoidance) \\
+    \textbf{OBJ-2} & FR-03 & ML-DSA-65 Identity Auth & \texttt{PqcEngine.kt} & TC-03 (Sig Verification) \\
+    \textbf{OBJ-2} & FR-04 & ML-KEM-1024 Key Agreement & \texttt{PqcEngine.kt} & TC-04 (KEM Encap/Decap) \\
+    \textbf{OBJ-3} & FR-07 & HKDF-SHA256 Derivation & \texttt{PqcEngine.kt} / \texttt{classical.py} & TC-05 (Key Parity Test) \\
+    \textbf{OBJ-3} & FR-08 & Keccak SHA3-256 Alignment & \texttt{PqcEngine.kt} (Pure-Kotlin) & TC-06 (Hash Determinism) \\
+    \textbf{OBJ-4} & FR-09 & AES-256-GCM Encapsulation & \texttt{PqcEngine.kt} / \texttt{classical.py} & TC-07 (Line-Rate AEAD) \\
+    \textbf{OBJ-4} & FR-11 & Anti-Replay Counter Defense & \texttt{QuantumSafeVpnService.kt} & TC-08 (Replay Rejection) \\
+    \textbf{OBJ-5} & FR-12 & Server Endpoint Settings & \texttt{ServerConfigScreen.kt} & TC-09 (Settings Persist) \\
+    \textbf{OBJ-5} & FR-13 & Real-Time Telemetry Cards & \texttt{HomeScreen.kt} / \texttt{VpnViewModel} & TC-10 (UI State Updates) \\
+    \textbf{OBJ-6} & FR-14 & Graceful Teardown \& Cleanup & \texttt{QuantumSafeVpnService.kt} & TC-11 (Resource Leakage) \\
+    \bottomrule
+  \end{tabular}
+\end{table}

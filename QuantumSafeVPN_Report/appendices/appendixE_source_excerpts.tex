@@ -1,0 +1,146 @@
+% ============================================================
+%  APPENDIX B: CORE SOURCE CODE EXCERPTS
+% ============================================================
+
+\chapter{CORE SOURCE CODE EXCERPTS}
+\label{app:source_excerpts}
+
+This appendix provides key excerpts of the core production source code across the Kotlin Android client and the Python Linux gateway.
+
+\section{Android Client: Core VpnService Implementation}
+
+Listing~\ref{lst:quantumsafe_vpn_service_core} presents the primary connection lifecycle method in the core VPN service (\texttt{QuantumSafe}\allowbreak\texttt{Vpn}\allowbreak\texttt{Service.kt}), illustrating kernel socket protection, handshake delegation, and worker dispatching.
+
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily\scriptsize, caption={Core Connection Lifecycle in QuantumSafeVpnService.kt.}, label={lst:quantumsafe_vpn_service_core}]
+class QuantumSafeVpnService : VpnService() {
+    private var vpnInterface: ParcelFileDescriptor? = null
+    private var socketChannel: SocketChannel? = null
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val pqcEngine = PqcEngine()
+
+    private fun establishTunnel(config: ServerConfig) {
+        serviceScope.launch {
+            try {
+                // Step 1: Open socket channel and enforce kernel-level bypass
+                socketChannel = SocketChannel.open().apply { configureBlocking(true) }
+                val socket = socketChannel!!.socket()
+                if (!protect(socket)) {
+                    throw IllegalStateException("Failed to protect transport socket from loop")
+                }
+                socket.tcpNoDelay = true
+
+                // Step 2: Connect to remote gateway and execute PQC handshake
+                socket.connect(InetSocketAddress(config.host, config.port), 10000)
+                val handshakeResult = pqcEngine.performHandshake(socket)
+
+                // Step 3: Configure virtual TUN interface via Builder
+                val builder = Builder()
+                    .setSession("QuantumSafe VPN")
+                    .setMtu(handshakeResult.config.mtu)
+                    .addAddress(handshakeResult.config.assignedIp, 24)
+                    .addRoute("0.0.0.0", 0)
+                    .addDnsServer("1.1.1.1")
+                    .setBlocking(true)
+
+                vpnInterface = builder.establish() ?: throw IllegalStateException("TUN failed")
+
+                // Step 4: Launch concurrent packet processing loops
+                launchUplinkWorker(vpnInterface!!, socket, pqcEngine)
+                launchDownlinkWorker(vpnInterface!!, socket, pqcEngine)
+                broadcastState("CONNECTED", handshakeResult.config.assignedIp)
+
+            } catch (e: Exception) {
+                Log.e("QuantumSafeVPN", "Tunnel establishment failed: ${e.message}", e)
+                teardownTunnel()
+                broadcastError("Connection failed: ${e.message}")
+            }
+        }
+    }
+}
+\end{lstlisting}
+
+\section{Android Client: Pure-Kotlin Cryptographic Wire Engine}
+
+Listing~\ref{lst:pqc_engine_core} illustrates the HKDF key derivation and anti-replay packet decryption in \texttt{PqcEngine.kt}.
+
+\begin{lstlisting}[language=Kotlin, basicstyle=\ttfamily\scriptsize, caption={HKDF Derivation and Replay Verification in PqcEngine.kt.}, label={lst:pqc_engine_core}]
+class PqcEngine {
+    private val secureRandom = SecureRandom()
+    private var secretKey: SecretKeySpec? = null
+
+    fun deriveSessionKey(sharedSecret: ByteArray): ByteArray {
+        val salt = ByteArray(32) { 0 }
+        val info = "QuantumSafeVPN-Session-Key".toByteArray(Charsets.UTF_8)
+
+        // HKDF-Extract: PRK = HMAC-SHA256(salt, sharedSecret)
+        val hmacExtract = Mac.getInstance("HmacSHA256").apply {
+            init(SecretKeySpec(salt, "HmacSHA256"))
+        }
+        val prk = hmacExtract.doFinal(sharedSecret)
+
+        // HKDF-Expand: OKM = HMAC-SHA256(PRK, info || 0x01)
+        val hmacExpand = Mac.getInstance("HmacSHA256").apply {
+            init(SecretKeySpec(prk, "HmacSHA256"))
+        }
+        val okm = hmacExpand.doFinal(info + byteArrayOf(1))
+        this.secretKey = SecretKeySpec(okm, 0, 32, "AES")
+        return okm
+    }
+
+    fun decryptPacket(frame: ByteArray, expectedSeq: Long): ByteArray {
+        if (frame.size < 28) throw IllegalArgumentException("Frame too short for GCM framing")
+        val iv = frame.copyOfRange(0, 12)
+        val ciphertextAndTag = frame.copyOfRange(12, frame.size)
+
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
+        val decrypted = cipher.doFinal(ciphertextAndTag)
+
+        val buffer = ByteBuffer.wrap(decrypted).order(ByteOrder.BIG_ENDIAN)
+        val seq = buffer.getLong()
+        if (seq <= expectedSeq) {
+            throw SecurityException("Anti-replay violation: seq=$seq <= expected=$expectedSeq")
+        }
+        val ipPacket = ByteArray(decrypted.size - 8)
+        buffer.get(ipPacket)
+        return ipPacket
+    }
+}
+\end{lstlisting}
+
+\section{Linux Gateway Server: Multi-Client Dispatch Daemon}
+
+Listing~\ref{lst:python_server_core} details the core handshake execution in \texttt{vpn/tunnel\_server.py}.
+
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\scriptsize, caption={Core Server Handshake Dispatch in tunnel\_server.py.}, label={lst:python_server_core}]
+def perform_handshake(sock, client_addr):
+    # Stage 1: Transmit server ML-DSA-65 public key (1,952B)
+    send_frame(sock, SERVER_DSA_PUBLIC_KEY)
+
+    # Stage 2: Receive client ML-KEM-1024 public key (1,568B)
+    client_kem_pk = recv_frame(sock)
+
+    # Stage 3A: Encapsulate shared secret (1,568B ciphertext)
+    ciphertext, shared_secret = encapsulate(client_kem_pk)
+
+    # Stage 3B: Sign transcript with ML-DSA-65 (3,309B signature)
+    transcript = b"QuantumSafeVPN-v1" + client_kem_pk + ciphertext
+    signature = sign(SERVER_DSA_SECRET_KEY, transcript)
+    send_frame(sock, ciphertext)
+    send_frame(sock, signature)
+
+    # Stage 3C: Allocate dynamic IP and transmit JSON configuration
+    assigned_ip = ip_pool.allocate(client_addr)
+    config_payload = {
+        "assigned_ip": assigned_ip,
+        "netmask": "255.255.255.0",
+        "server_ip": "10.8.0.1",
+        "dns": ["1.1.1.1", "8.8.8.8"],
+        "mtu": 1400
+    }
+    send_frame(sock, json.dumps(config_payload).encode("utf-8"))
+
+    # Stage 4: Derive AES-256 session key via HKDF-SHA256
+    session_key = derive_session_key(shared_secret)
+    return session_key, assigned_ip
+\end{lstlisting}

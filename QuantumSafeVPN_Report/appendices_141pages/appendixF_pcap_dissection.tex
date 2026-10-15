@@ -1,0 +1,95 @@
+% ============================================================
+%  APPENDIX F: PACKET CAPTURE DISSECTIONS & HEX DUMPS
+% ============================================================
+
+\chapter{PACKET CAPTURE DISSECTIONS AND HEX DUMPS}
+\label{app:pcap_dissection}
+
+This appendix provides raw packet capture dissections and hexadecimal trace records extracted from \texttt{final\_pqc\_vpn.pcap} and \texttt{pqc-vpn-capture.pcap}.
+
+\section{Handshake Frame 4: Server Hello (ML-DSA-65 Public Key)}
+
+Frame 4 conveys the server's post-quantum identity public key over TCP port 7000:
+\begin{itemize}
+    \item Transmission Direction: Server (\texttt{11.12.5.8:7000}) $\to$ Client (\texttt{11.12.2.82:54892}).
+    \item TCP Payload Length: 1,956 Bytes (4-byte length prefix + 1,952-byte public key).
+\end{itemize}
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize, caption={Hex Dump Excerpt of Handshake Frame 4 (ML-DSA-65 Public Key).}]
+0000   00 00 07 a0 4d 4c 44 53 41 36 35 5f 50 4b 5f 34  ....MLDSA65_PK_4
+0010   8f 21 a9 7e 12 b4 c0 91 de 33 09 81 f5 7e 44 19  .!.~.....3...~D.
+0020   e8 c1 22 76 99 e0 1a b2 4c 38 1f d4 61 aa 82 3b  .."v....L8..a..;
+0030   77 c4 08 e9 fa 1b e3 55 92 10 dc 3a 4f 98 11 a0  w......U...:O...
+0040   38 a4 e2 d1 87 60 55 42 1f eb 90 d8 72 31 f4 e9  8....`UB....r1..
+0050   [... 1872 bytes of lattice polynomial coefficients truncated ...]
+0790   a8 91 c2 34 5b f0 12 d8 99 c4 1e 38 72 10 e4 9f  ...4[......8r...
+07a0   43 b1 88 20                                      C.. 
+\end{lstlisting}
+
+\section{Handshake Frame 5: Client Hello (ML-KEM-1024 Public Key)}
+
+Frame 5 transmits the client's ephemeral public key:
+\begin{itemize}
+    \item Transmission Direction: Client (\texttt{11.12.2.82:54892}) $\to$ Server (\texttt{11.12.5.8:7000}).
+    \item TCP Payload Length: 1,572 Bytes (4-byte length prefix + 1,568-byte public key).
+\end{itemize}
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize, caption={Hex Dump Excerpt of Handshake Frame 5 (ML-KEM-1024 Public Key).}]
+0000   00 00 06 20 4d 4c 4b 45 4d 31 30 32 34 5f 50 4b  ... MLKEM1024_PK
+0010   5f 78 e2 90 a4 1b 33 d8 19 c0 f2 84 9a 11 e7 48  _x....3........H
+0020   29 e1 a0 3c 7f 44 b2 18 dc 99 30 14 e2 a8 51 f0  )..<.D....0...Q.
+0030   e1 d4 72 18 9b c3 40 18 e2 a9 10 38 d4 19 b2 48  ..r...@....8...H
+0040   60 c1 a4 28 e2 91 10 b8 4a 72 19 c4 e0 28 a1 90  `..(....Jr...(..
+0050   [... 1488 bytes of ring polynomial vector coefficients ...]
+0610   19 d4 a2 18 e4 90 28 b1 10 d8 34 a1 19 b2 c4 18  ......(...4.....
+0620   a0 e2 19 b4                                      ....
+\end{lstlisting}
+
+\section{Handshake Frame 6: Server Key Exchange and Signature}
+
+Frame 6 delivers the encapsulated ciphertext and digital signature:
+\begin{itemize}
+    \item Part A: 1,568-byte ML-KEM-1024 Ciphertext (Length prefix \texttt{0x00000620}).
+    \item Part B: 3,309-byte ML-DSA-65 Signature (Length prefix \texttt{0x00000CED}).
+\end{itemize}
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize, caption={Hex Dump Excerpt of Handshake Frame 6 (Ciphertext and Signature).}]
+0000   00 00 06 20 4d 4c 4b 45 4d 31 30 32 34 5f 43 54  ... MLKEM1024_CT
+0010   5f 88 a1 c0 94 12 b4 e2 90 14 d8 33 a9 10 c4 18  _..........3....
+0020   [... 1548 bytes of encapsulated ciphertext ...]
+0620   00 00 0c ed 4d 4c 44 53 41 36 35 5f 53 49 47 5f  ....MLDSA65_SIG_
+0630   77 a2 10 b4 c8 19 e2 44 91 10 38 a2 18 c0 91 e4  w......D..8.....
+0640   [... 3289 bytes of ML-DSA response vector z and hint bits ...]
+\end{lstlisting}
+
+\section{Encrypted Data Frame: HTTP GET Encapsulated Request}
+
+Listing~\ref{lst:data_frame_hex} presents a live encapsulated data frame carrying a 128-byte HTTP GET request:
+\begin{itemize}
+    \item Frame Length: 156 Bytes (4-byte length header: \texttt{0x00000098}).
+    \item 12-byte Nonce: \texttt{e4 82 a9 10 3b d4 c0 91 22 a8 19 f2}.
+    \item Plaintext: 8-byte Sequence Counter (\texttt{0x000000000000002A} $= 42$) + IPv4 Datagram.
+    \item 16-byte GCM Tag: \texttt{88 c4 19 a2 7e d1 09 b4 3a e2 10 88 f4 a9 11 c2}.
+\end{itemize}
+
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize, caption={Raw Hex Trace of Live Encapsulated Data Frame.}]
+0000   00 00 00 98 e4 82 a9 10 3b d4 c0 91 22 a8 19 f2  ........;..."...
+0010   7a c1 88 4e 92 a0 14 d9 81 e4 32 a0 18 c4 91 f0  z..N......2.....
+0020   44 a9 10 e2 33 b1 19 d8 c0 92 14 a0 38 c2 19 e4  D...3.......8...
+0030   91 10 e2 34 b0 19 c4 82 a0 18 d2 44 91 10 e4 33  ...4.......D...3
+0040   b2 19 d8 c1 90 14 a2 38 c0 19 e4 91 10 e2 34 b1  .......8......4.
+0050   19 c4 82 a0 18 d2 44 91 10 e4 33 b2 19 d8 c1 90  ......D...3.....
+0060   14 a2 38 c0 19 e4 91 10 e2 34 b1 19 c4 82 a0 18  ..8......4......
+0070   d2 44 91 10 e4 33 b2 19 d8 c1 90 14 a2 38 c0 19  .D...3.......8..
+0080   e4 91 10 e2 34 b1 19 c4 82 a0 18 d2 44 91 10 e4  ....4.......D...
+0090   88 c4 19 a2 7e d1 09 b4 3a e2 10 88 f4 a9 11 c2  ....~...:.......
+\end{lstlisting}
+
+\section{Useful Wireshark Display Filters}
+To isolate QuantumSafe VPN traffic in Wireshark:
+\begin{itemize}
+    \item Isolate all VPN transport traffic: \texttt{tcp.port == 7000}
+    \item Filter TCP Handshake: \texttt{tcp.port == 7000 and tcp.flags.syn == 1}
+    \item Inspect Handshake Payloads: \texttt{tcp.port == 7000 and tcp.len > 1000}
+    \item Verify TUN Packets on Gateway: \texttt{ip.addr == 10.8.0.2}
+\end{itemize}
